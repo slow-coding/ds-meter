@@ -11,6 +11,18 @@ enum Probe {
         NSApp.setActivationPolicy(.accessory)
 
         // 登录窗口自检：只打开、不登录（没有账号也不该替人登录），把页面存一张图。
+        // 自检：那条 30 天开着的时候，在面板别处点一下，看它收没收。
+        // 合成一次真点击走窗口（不是调函数），所以必须跑真的 NSApp.run：没起事件循环时
+        // 窗口不是 key，SwiftUI 收不到点击（这个坑踩过，见 --tap 实现）。
+        if arguments.contains("--tap-check") {
+            let point = arguments.firstIndex(of: "--tap-check").flatMap { index -> CGFloat? in
+                guard index + 1 < arguments.count, let y = Double(arguments[index + 1]) else { return nil }
+                return CGFloat(y)
+            } ?? 240
+            TapCheck.run(point: point)
+            exit(0)
+        }
+
         if arguments.contains("--login-check") {
             let dir: String? = arguments.firstIndex(of: "--snapshot").flatMap {
                 $0 + 1 < arguments.count ? arguments[$0 + 1] : nil
@@ -109,6 +121,24 @@ enum Probe {
             // demo 模式不碰凭据：截图和自检都不该读本机那两串
             "apiKey": demo ? "demo" : Account.apiKeyOrigin,
         ]
+
+        // 设置窗口那张图（README 用）：离屏渲染，字段是空的
+        if arguments.contains("--settings-shot") {
+            let host = NSHostingView(rootView: SettingsView(meter: meter, startTab: 1, fillsCredentials: false))
+            host.layoutSubtreeIfNeeded()
+            let size = host.fittingSize
+            let container = PanelBackground(frame: NSRect(x: 0, y: 0, width: 470, height: max(200, size.height)))
+            host.frame = container.bounds
+            host.autoresizingMask = [.width, .height]
+            container.addSubview(host)
+            container.layoutSubtreeIfNeeded()
+            if let index = arguments.firstIndex(of: "--snapshot"), index + 1 < arguments.count {
+                let dir = URL(fileURLWithPath: arguments[index + 1])
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                try? capture(container).png.write(to: dir.appendingPathComponent("settings.png"))
+            }
+            exit(0)
+        }
 
         if let index = arguments.firstIndex(of: "--status"), index + 1 < arguments.count {
             let dir = URL(fileURLWithPath: arguments[index + 1])
@@ -248,5 +278,60 @@ private final class PanelBackground: NSView {
     override func draw(_ dirtyRect: NSRect) {
         NSColor.windowBackgroundColor.setFill()
         bounds.fill()
+    }
+}
+
+/// 自检：面板底下点一下，那条 30 天收不收。
+private final class TapCheck: NSObject, NSApplicationDelegate {
+    static func run(point: CGFloat) {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.regular)
+        let check = TapCheck()
+        check.pointFromTop = point
+        app.delegate = check
+        app.run()
+    }
+
+    /// 从面板顶边往下量多少（点）。窗口按面板实际尺寸开，坐标才一一对得上——
+    /// 窗口比内容高的时候 VStack 会在里面居中，按窗口坐标算出来的点全错位。
+    private var pointFromTop: CGFloat = 240
+    private var window: NSWindow!
+
+    func applicationDidFinishLaunching(_ note: Notification) {
+        let meter = Meter()
+        meter.loadDemo()
+        let hosting = NSHostingView(rootView: MeterPanel(meter: meter, pickerStartOpen: true))
+        hosting.layoutSubtreeIfNeeded()
+        let size = hosting.fittingSize
+        let window = NSWindow(
+            contentRect: NSRect(x: 200, y: 200, width: size.width, height: size.height),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        window.contentView = hosting
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        self.window = window
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            let opened = hosting.fittingSize.height
+            let point = CGPoint(x: 200, y: opened - self.pointFromTop)
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                if let event = NSEvent.mouseEvent(
+                    with: type, location: point, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window.windowNumber, context: nil,
+                    eventNumber: 0, clickCount: 1, pressure: 1
+                ) {
+                    window.sendEvent(event)
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                let after = hosting.fittingSize.height
+                print("{\"fromTop\": \(Int(self.pointFromTop)), \"opened\": \(Int(opened)), "
+                      + "\"afterTap\": \(Int(after)), \"collapsed\": \(after < opened - 20)}")
+                fflush(stdout)
+                NSApp.terminate(nil)
+            }
+        }
     }
 }
