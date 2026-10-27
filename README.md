@@ -10,9 +10,13 @@
 
 > 非官方工具，跟 DeepSeek 官方没关系。用量读的是平台网页自己在用的账单接口，没有公开文档，随时可能变。
 
-## 30 秒上手（已经有 Xcode 命令行工具）
+## 30 秒上手
 
-没有命令行工具就先跑 `xcode-select --install`，装完再回来（见下面「装」那一节的必备组件表）。
+**最快**：从 [Releases](../../releases) 下 `DS-Meter-<版本>.dmg`，拖进「应用程序」，打开。第一次会被系统拦一次（没有开发者签名），放行方法见下面「装」。
+
+**用 Homebrew**：`brew install --cask <账号>/ds-meter/ds-meter`，不用放行。
+
+**自己编**（要先有 Xcode 命令行工具）：
 
 ```bash
 git clone <仓库地址> ds-meter && cd ds-meter && ./scripts/build-app.sh
@@ -48,11 +52,38 @@ open "/Applications/DS Meter.app"
 2. **账单**：DeepSeek 没有开放账单 API；网页的用量页靠浏览器里的一串登录凭证取数。app 在自己的窗口里让你登录一次，拿到那串凭证，之后替你去读同一份账单。
 3. **所以**：不登录只有余额；登录了才有今天花了多少、每小时、分模型、命中率。凭证只存本机，只发给 `platform.deepseek.com`。
 
-## 装（必备组件 + 编译）
+## 装
 
-**只发源码，不发签名的包。** 仓库和 Release 里没有 `.app`、没有 `.dmg`、没有公证过的二进制——你拿到的是代码；自己编出来的 app 用 `codesign -s -` 做本机 ad-hoc 签名，不存在「信不信作者的包」这回事。
+三种方式，同一个 app。**都不带开发者签名**：`Signature=adhoc`，证书不属于任何人，也没有公证。dmg 是 CI 在干净机器上编的；自己编就是你自己机器上的签名。
 
-### 必备组件
+### 方式一：dmg
+
+1. 从 [Releases](../../releases) 下载 `DS-Meter-<版本>.dmg`，拖进「应用程序」。
+2. 第一次打开会被拦一次（没有开发者签名，正常现象）：
+   - macOS 15+：系统设置 → 隐私与安全 → 滚到底 → 「仍要打开」；
+   - 或者终端：`xattr -dr com.apple.quarantine "/Applications/DS Meter.app"`。
+3. 想核对下载有没有被换过：
+
+```bash
+shasum -a 256 ~/Downloads/DS-Meter-1.0.0.dmg
+# 和 Release 里的 SHA256SUMS 对一下
+```
+
+dmg 是 universal（Apple Silicon + Intel），macOS 13+。
+
+### 方式二：Homebrew
+
+```bash
+brew install --cask <账号>/ds-meter/ds-meter
+```
+
+brew 用自己的下载器，文件不带 quarantine 标记，所以装完直接能开，不用放行。升级：`brew upgrade --cask ds-meter`。
+
+> cask 放在个人 tap 里，Homebrew 官方不审核。它只指向同一个 dmg，`sha256` 由 CI 从那个 dmg 算出来，和 Release 里的 `SHA256SUMS` 一致。
+
+### 方式三：源码
+
+要求：
 
 | 要什么 | 怎么确认 | 怎么装 |
 | --- | --- | --- |
@@ -60,7 +91,7 @@ open "/Applications/DS Meter.app"
 | Xcode 命令行工具（`swift`、`clang`、`git` 都在里面） | `xcode-select -p` 有输出 | `xcode-select --install`，弹窗里点安装；约 2–5 GB，5–15 分钟 |
 | 2 GB 空闲磁盘 | — | — |
 
-不需要 Node、Python、Homebrew，也不需要付费的 Apple 开发者账号。Apple Silicon / Intel 都行。
+不需要 Node、Python、Homebrew，也不需要付费的 Apple 开发者账号。
 
 ```bash
 git clone <仓库地址> ds-meter
@@ -71,11 +102,11 @@ open "/Applications/DS Meter.app"
 
 `xcode-select --install` 必须等它装完再编，否则会报 `swift: command not found`。
 
-### 签名是怎么回事
+### 关于签名
 
-- 默认 **ad-hoc 签名**（`codesign --sign -`）：本机编、本机用，完全够用；每次重编签名会变，但 app 不碰钥匙串，不会因此弹密码框。
-- 想固定签名就用自己的证书：`SIGN_ID="Apple Development: 你的名字 (XXXXXXXXXX)" ./scripts/build-app.sh`。
-- 我们**不提供签名包、不做公证**：那需要每年 99 美元的 Apple Developer Program，而且等于让你信任作者的一张证书。源码 + 本地编译是更干净的路径。
+- 分发的包是 **ad-hoc 签名**（`codesign --sign -`）：能校验完整性，但没有身份——所以系统会拦一次，也没有人能通过签名追到某个开发者。
+- 不提供公证（notarization）：那需要 99 美元/年的 Apple Developer Program，而且等于让所有用户信任一张个人证书。
+- 自己编也一样是 ad-hoc；想固定签名就用自己的证书：`SIGN_ID="Apple Development: 你的名字 (XXXXXXXXXX)" ./scripts/build-app.sh`。
 - 本地编出来的 app 没有 `com.apple.quarantine` 标记，Gatekeeper 不会拦。
 
 第一次运行会在「登录项」里注册开机自启，可以关。卸载：`./scripts/uninstall.sh`（应用、自启、凭据、登录态、缓存一起清）。
@@ -84,6 +115,7 @@ open "/Applications/DS Meter.app"
 
 - `swift: command not found` → 命令行工具没装好，重跑 `xcode-select --install`。
 - `xcodebuild: error: tool requires Xcode` → 装了完整 Xcode 但没同意协议：`sudo xcodebuild -license accept`。
+- 「已损坏，无法打开」→ 先 `xattr -dr com.apple.quarantine "/Applications/DS Meter.app"`；还不行就是包在传输里坏了，用 sha256 对一下。
 - 想只在终端里跑、不装 app：`swift build -c release` 之后用 `.build/release/DSMeter`。
 
 ## 两种用法
@@ -153,6 +185,12 @@ A menu bar item: a dot + today's spend. Green = off-peak (half price), yellow = 
 
 ## Quick start
 
+**Fastest**: grab `DS-Meter-<version>.dmg` from [Releases](../../releases), drag it into Applications, open it. macOS blocks it once (no developer signature); see Install below for the one-time override.
+
+**With Homebrew**: `brew install --cask <user>/ds-meter/ds-meter` — no Gatekeeper prompt.
+
+**Build it yourself**:
+
 ```bash
 git clone <repo> ds-meter && cd ds-meter && ./scripts/build-app.sh
 open "/Applications/DS Meter.app"
@@ -187,11 +225,36 @@ The date button unrolls the last 30 days as a strip; click a day to inspect it:
 2. **Billing**: DeepSeek has no public billing API. Its usage page reads data using a sign-in token stored in the browser. The app opens its own sign-in window once, takes that token, and reads the same billing numbers for you.
 3. **Therefore**: without signing in you only get the balance; with it you get today's spend, hourly bars, per-model costs and cache-hit rate.
 
-## Install (prerequisites + build)
+## Install
 
-**Source only — no signed packages.** There is no `.app`, no `.dmg` and no notarized binary in the repo or in Releases. You get code; the app you build is signed ad-hoc (`codesign --sign -`) on your own machine, so nobody has to trust anyone else's binary.
+Three ways, same app. **None of them carries a developer signature**: `Signature=adhoc`, no team, no notarization. The dmg is built by CI on a clean runner; building locally signs with your own machine.
 
-### Prerequisites
+### Option 1: dmg
+
+1. Download `DS-Meter-<version>.dmg` from [Releases](../../releases), drag it into Applications.
+2. The first launch is blocked once (no developer signature; expected):
+   - macOS 15+: System Settings → Privacy & Security → scroll down → "Open Anyway";
+   - or in a terminal: `xattr -dr com.apple.quarantine "/Applications/DS Meter.app"`.
+3. Check the download if you want:
+
+```bash
+shasum -a 256 ~/Downloads/DS-Meter-1.0.0.dmg
+# compare with SHA256SUMS in the release
+```
+
+The dmg is universal (Apple Silicon + Intel), macOS 13+.
+
+### Option 2: Homebrew
+
+```bash
+brew install --cask <user>/ds-meter/ds-meter
+```
+
+Homebrew downloads with its own client, so the app carries no quarantine flag and Gatekeeper does not prompt. Upgrade with `brew upgrade --cask ds-meter`.
+
+> The cask lives in a personal tap and is not reviewed by Homebrew. It points to the same dmg; its `sha256` is computed by CI from that dmg and matches `SHA256SUMS`.
+
+### Option 3: from source
 
 | Need | Check | Install |
 | --- | --- | --- |
@@ -199,7 +262,7 @@ The date button unrolls the last 30 days as a strip; click a day to inspect it:
 | Xcode command line tools (`swift`, `clang`, `git`) | `xcode-select -p` prints a path | `xcode-select --install` (2–5 GB, 5–15 min) |
 | ~2 GB free disk | — | — |
 
-No Node, no Python, no Homebrew, no paid Apple Developer account required. Apple Silicon and Intel both work.
+No Node, no Python, no Homebrew, no paid Apple Developer account.
 
 ```bash
 git clone <repo> ds-meter
@@ -212,17 +275,18 @@ Wait for `xcode-select --install` to finish before building, or you will get `sw
 
 ### About signing
 
-- Ad-hoc signing by default: fine for building and running on your own Mac. The signature changes on every rebuild, but the app does not touch the Keychain, so nothing prompts for a password.
-- Bring your own certificate if you want a stable identity: `SIGN_ID="Apple Development: Your Name (XXXXXXXXXX)" ./scripts/build-app.sh`.
-- We do **not** ship signed or notarized builds: that needs a $99/year Apple Developer Program membership and asks you to trust the author's certificate. Source plus a local build is the cleaner path.
-- A locally built app carries no `com.apple.quarantine` flag, so Gatekeeper does not block it.
+- Distributed builds are **ad-hoc signed** (`codesign --sign -`): integrity is verifiable, identity is not. That is why macOS asks once, and why no one can trace a build back to a developer.
+- No notarization: that needs the $99/year Apple Developer Program, and it would ask every user to trust one person's certificate.
+- Building locally is ad-hoc too; bring your own certificate with `SIGN_ID="Apple Development: Your Name (XXXXXXXXXX)" ./scripts/build-app.sh` if you want a stable identity.
+- A locally built app has no `com.apple.quarantine` flag, so Gatekeeper stays out of the way.
 
 The first run registers a login item (can be turned off). Uninstall with `./scripts/uninstall.sh`, which removes the app, the login item, credentials, the web sign-in state and caches.
 
 ### Troubleshooting
 
-- `swift: command not found` → command line tools are not installed: rerun `xcode-select --install`.
-- `xcodebuild: error: tool requires Xcode` → full Xcode installed but the license not accepted: `sudo xcodebuild -license accept`.
+- `swift: command not found` → command line tools are missing: rerun `xcode-select --install`.
+- `xcodebuild: error: tool requires Xcode` → full Xcode installed but license not accepted: `sudo xcodebuild -license accept`.
+- "App is damaged" → run `xattr -dr com.apple.quarantine "/Applications/DS Meter.app"` first; if it persists, the download is corrupt — check sha256.
 - Just want the binary, no app: `swift build -c release`, then run `.build/release/DSMeter`.
 
 ## Two ways to use it
@@ -274,7 +338,12 @@ swift build -c release
 .build/release/DSMeter --probe --fresh --settings-shot --snapshot /tmp/dsm   # the settings window
 .build/release/DSMeter --probe --login-check --snapshot /tmp/dsm             # opens the sign-in window
 swift scripts/make-banner.swift                                              # regenerate the banner
+
+./scripts/package-release.sh                                                 # build a dmg + SHA256SUMS
+REPO=owner/ds-meter ./scripts/package-release.sh                             # also emit the Homebrew cask
 ```
+
+Packaging details live in [`packaging/README.md`](packaging/README.md).
 
 ## License
 

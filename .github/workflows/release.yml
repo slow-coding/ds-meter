@@ -1,0 +1,51 @@
+name: release
+
+# 打 tag（v1.2.3）就出包：universal dmg（ad-hoc 签名，没有任何人的证书）+ 校验和 + Homebrew cask。
+# 不用任何 secret，也不读任何证书。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 版本要对得上 tag
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME 和 VERSION ($version) 对不上"
+            exit 1
+          fi
+          sw_vers
+          swift --version
+
+      - name: 打包（universal，ad-hoc）
+        env:
+          REPO: ${{ github.repository }}
+        run: ./scripts/package-release.sh
+
+      - name: 看一眼产物
+        run: |
+          ls -lh dist/
+          lipo -info "dist/DS Meter.app/Contents/MacOS/DSMeter" 2>/dev/null || true
+          codesign -dv "dist/DS Meter.app" 2>&1 | grep -E "Signature|TeamIdentifier" || true
+          cat dist/SHA256SUMS
+
+      - name: 建 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" \
+            "dist/DS-Meter-$VERSION.dmg" \
+            dist/SHA256SUMS \
+            dist/ds-meter.rb \
+            --title "DS Meter $VERSION" \
+            --generate-notes

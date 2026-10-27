@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP_NAME="DS Meter"
+VERSION="$(tr -d '[:space:]' < VERSION 2>/dev/null || echo 1.0.0)"
 CACHE="$HOME/Library/Caches/ds-meter/swiftpm"
 STAGE="$TMPDIR/ds-meter-stage"
 
@@ -24,7 +25,7 @@ else
     echo "提示：assets/AppIcon.icns 不存在，先跑 swift scripts/make-icon.swift"
 fi
 
-cat > "$STAGE/$APP_NAME.app/Contents/Info.plist" <<'PLIST'
+cat > "$STAGE/$APP_NAME.app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -41,8 +42,8 @@ cat > "$STAGE/$APP_NAME.app/Contents/Info.plist" <<'PLIST'
          系统会把选的语言写进本 App 偏好的 AppleLanguages，L10n 读的就是那一条。 -->
     <key>CFBundleLocalizations</key>
     <array><string>en</string><string>zh-Hans</string></array>
-    <key>CFBundleShortVersionString</key><string>1.0</string>
-    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleShortVersionString</key><string>${VERSION}</string>
+    <key>CFBundleVersion</key><string>${VERSION}</string>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
