@@ -19,7 +19,7 @@
 **自己编**（要先有 Xcode 命令行工具）：
 
 ```bash
-git clone <仓库地址> ds-meter && cd ds-meter && ./scripts/build-app.sh
+git clone https://github.com/slow-coding/ds-meter && cd ds-meter && ./scripts/build-app.sh
 open "/Applications/DS Meter.app"
 ```
 
@@ -94,7 +94,7 @@ brew 用自己的下载器，文件不带 quarantine 标记，所以装完直接
 不需要 Node、Python、Homebrew，也不需要付费的 Apple 开发者账号。
 
 ```bash
-git clone <仓库地址> ds-meter
+git clone https://github.com/slow-coding/ds-meter
 cd ds-meter
 ./scripts/build-app.sh     # 编 + 装进 /Applications，约 10 秒
 open "/Applications/DS Meter.app"
@@ -192,7 +192,7 @@ A menu bar item: a dot + today's spend. Green = off-peak (half price), yellow = 
 **Build it yourself**:
 
 ```bash
-git clone <repo> ds-meter && cd ds-meter && ./scripts/build-app.sh
+git clone https://github.com/slow-coding/ds-meter && cd ds-meter && ./scripts/build-app.sh
 open "/Applications/DS Meter.app"
 ```
 
@@ -265,7 +265,7 @@ Homebrew downloads with its own client, so the app carries no quarantine flag an
 No Node, no Python, no Homebrew, no paid Apple Developer account.
 
 ```bash
-git clone <repo> ds-meter
+git clone https://github.com/slow-coding/ds-meter
 cd ds-meter
 ./scripts/build-app.sh
 open "/Applications/DS Meter.app"
