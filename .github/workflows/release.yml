@@ -42,13 +42,19 @@ jobs:
           codesign -dv "dist/DS Meter.app" 2>&1 | grep -E "Signature|TeamIdentifier" || true
           cat dist/SHA256SUMS
 
-      - name: 建 release
+      - name: 建 release（已经存在就补传，保证可重跑）
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v$VERSION" \
-            "dist/DS-Meter-$VERSION.dmg" \
-            dist/SHA256SUMS \
-            dist/ds-meter.rb \
-            --title "DS Meter $VERSION" \
-            --generate-notes
+          tag="v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" \
+              "dist/DS-Meter-$VERSION.dmg" dist/SHA256SUMS dist/ds-meter.rb --clobber
+          else
+            gh release create "$tag" \
+              "dist/DS-Meter-$VERSION.dmg" \
+              dist/SHA256SUMS \
+              dist/ds-meter.rb \
+              --title "DS Meter $VERSION" \
+              --generate-notes
+          fi
