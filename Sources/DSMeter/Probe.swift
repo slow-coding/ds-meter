@@ -116,6 +116,8 @@ enum Probe {
             "hit": meter.snap.today.hit,
             "output": meter.snap.today.output,
             "hitRate": meter.snap.today.hitRate ?? -1,
+            "unitPrice": meter.snap.today.unitPricePer100M ?? -1,
+            "yesterdayUnitPrice": meter.snap.days[1]?.unitPricePer100M ?? -1,
             "ratePerHour": meter.snap.ratePerHour ?? -1,
             "tone": PeakHours.now.label,
             "models": meter.snap.today.models.map { ["name": $0.name, "tokens": $0.tokens, "cny": $0.cost] },

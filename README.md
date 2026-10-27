@@ -25,7 +25,7 @@ open "/Applications/DS Meter.app"
 
 然后：菜单栏那格 → 「登录网页读取」→ 登录 → 出数。
 
-点菜单栏那格，面板从上面掉下来：余额、今天 / 昨天、那天的每小时柱子和 token、闲时 / 高峰各花了多少、缓存命中率、分模型、还能撑几天。没登录时那里是一句话加一颗按钮。
+点菜单栏那格，面板从上面掉下来：余额、今天 / 昨天、那天的每小时柱子和 token、闲时 / 高峰各花了多少、缓存命中率、每亿 token 的单价（那天花了多少 ÷ 那天的 token 量，跟前一天比着看）、分模型、还能撑几天。没登录时那里是一句话加一颗按钮。
 
 日期按钮把最近 30 天铺成一条柱条，点哪天看哪天。
 
@@ -193,7 +193,7 @@ open "/Applications/DS Meter.app"
 
 Then: menu bar → **Sign in on web** → sign in → done.
 
-Click the menu bar item and the panel drops down: balance, today / yesterday, that day's hourly bars and tokens, peak vs off-peak spend, cache-hit rate, per-model cost, and how many days the balance lasts. Before signing in it shows one sentence and one button.
+Click the menu bar item and the panel drops down: balance, today / yesterday, that day's hourly bars and tokens, peak vs off-peak spend, cache-hit rate, cost per 100M tokens for that day (its spend ÷ its tokens, next to the day before), per-model cost, and how many days the balance lasts. Before signing in it shows one sentence and one button.
 
 The date button unrolls the last 30 days as a strip; click a day to inspect it.
 

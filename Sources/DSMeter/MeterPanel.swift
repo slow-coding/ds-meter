@@ -136,6 +136,8 @@ struct MeterPanel: View {
 
                 splitColumns.padding(.top, 12).dismissesPicker(closePicker)
 
+                unitPriceRow.padding(.top, 10).dismissesPicker(closePicker)
+
                 if modelSlots > 0 {
                     VStack(alignment: .leading, spacing: 7) {
                         ForEach(0..<modelSlots, id: \.self) { index in
@@ -531,6 +533,40 @@ struct MeterPanel: View {
         guard day.hasPeakHours else { return T.peakAllOffPeak.s }
         guard peak >= 0.005 else { return "\(T.peak.s) \(Fmt.money(0))" }
         return L.peakMoney(Fmt.money(peak), multiplier: PeakHours.multiplierLabel)
+    }
+
+    // MARK: - 每亿 token 的单价
+
+    /// 那天花了多少 ÷ 那天的 token 量。切日跟着变；后面括号里是前一天同一个数，
+    /// 拿它当尺子——两个数一比就知道那天是高峰多、还是缓存没命中。
+    private var unitPriceRow: some View {
+        let price = dayLoaded ? day.unitPricePer100M : nil
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(T.unitPrice.s)
+                .font(Style.body)
+                .foregroundStyle(.secondary)
+            if let price {
+                Text(Fmt.money(price))
+                    .font(Style.value)
+                    .monospacedDigit()
+            } else {
+                Text("—")
+                    .font(Style.value)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            if let price, let previous = shadow?.unitPricePer100M {
+                Text(L.unitPriceReference(
+                    Fmt.money(previous),
+                    relation: meter.selected == 0 ? T.yesterday.s : T.previousDay.s
+                ))
+                .font(.system(size: 10))
+                .monospacedDigit()
+                .foregroundStyle(.tertiary)
+            }
+            Spacer(minLength: 0)
+        }
+        .help(T.unitPriceHelp.s)
     }
 
     // MARK: - 页脚

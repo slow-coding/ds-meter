@@ -318,18 +318,18 @@ final class Meter: ObservableObject {
             return 1 + (unit - 0.5) * 2 * spread
         }
 
-        func bill(scale: Double) -> PlatformClient.DayBill {
+        func bill(scale: Double, density: Double = 1) -> PlatformClient.DayBill {
             var bill = PlatformClient.DayBill()
             for hour in 0..<24 {
                 let cost = (shape[hour] * scale * jitter(0.12) * 100).rounded() / 100
                 bill.hours[hour] = cost
-                bill.hourTokens[hour] = (cost * 12_500_000 * jitter(0.2)).rounded()
+                bill.hourTokens[hour] = (cost * 12_500_000 * density * jitter(0.2)).rounded()
             }
             let total = bill.hours.reduce(0, +)
             let flash = (total * 0.96 * 100).rounded() / 100
             let pro = ((total - flash) * 100).rounded() / 100
             bill.modelCost = ["deepseek-flash": flash, "deepseek-v4-pro": pro]
-            let tokens = total * 13_000_000
+            let tokens = total * 13_000_000 * density
             bill.tokens = [
                 "deepseek-flash": .init(
                     requests: Int(total * 330),
@@ -351,10 +351,13 @@ final class Meter: ObservableObject {
         var next = Snapshot()
         next.days[0] = DayCost(bill: bill(scale: 1), weekday: PeakHours.weekday(of: Date()))
         let scales: [Double] = [0.62, 0.88, 0.45, 1.05, 0.71, 0.93, 0.58]
+        // 每天「一块钱换来多少 token」不一样（缓存命中率高就换得多），所以每亿 token 的单价天天不同：
+        // 截图上那个括号里的对照才看得出变化，否则假数据里每天都一样。
+        let densities: [Double] = [0.86, 0.94, 0.78, 1.05, 0.91, 0.83, 1.02]
         for (index, scale) in scales.enumerated() {
             let offset = index + 1
             next.days[offset] = DayCost(
-                bill: bill(scale: scale),
+                bill: bill(scale: scale, density: densities[index % densities.count]),
                 weekday: PeakHours.weekday(of: PeakHours.daysBefore(offset))
             )
         }
@@ -438,6 +441,14 @@ struct DayCost {
 
     /// 那天一共过了多少 token（命中 + 未命中 + 输出）。
     var tokenTotal: Int { hit + miss + output }
+
+    /// 每亿 token 花多少钱：那天的钱 ÷ 那天的 token 量 × 1 亿。
+    /// 分母就是面板上那个 token 总量，看的人能自己去除；高峰时长和缓存命中率都会拉动它。
+    /// 那天没有 token 记录（金额接口通了、量接口没通）就不给数，别摆个 0 或无穷。
+    var unitPricePer100M: Double? {
+        let total = tokenTotal
+        return total > 0 ? money / Double(total) * 100_000_000 : nil
+    }
 
     /// 那天有没有高峰时段（周末全天都是闲时价）。
     var hasPeakHours: Bool { (2...6).contains(weekday) }

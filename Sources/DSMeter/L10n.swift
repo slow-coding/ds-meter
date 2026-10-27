@@ -28,9 +28,9 @@ enum T {
     case hit, miss, hitDash, missDash
     case loginTitle, loginExpiredTitle, loginBody, loginAction
     case setupTitle, setupBody, loginExpiredBody, setupBalanceOnly, loginStaysLocal
-    case vsYesterday, vsPreviousDay
+    case vsYesterday, vsPreviousDay, previousDay
     case runway, runwayNoData, priceLine
-    case hourChart, tokenLayer
+    case hourChart, tokenLayer, unitPrice, unitPriceHelp
 
     // 菜单
     case menuRefresh, menuSettings, menuLogin, menuUsage, menuPricing, menuQuit, menuAutoStart, statusTooltip
@@ -91,11 +91,14 @@ enum T {
         case .missDash: return "未命中 —"
         case .vsYesterday: return "比昨天"
         case .vsPreviousDay: return "比前一天"
+        case .previousDay: return "前一天"
         case .runway: return "余额还能撑"
         case .runwayNoData: return "跑满一整天之后才有「平均每天」"
         case .priceLine: return "价格"
         case .hourChart: return "上面一层是每小时花了多少（绿闲时、橙高峰，淡的是还没到的时段），下面一层是同一小时的 token 量；灰的是前一天同一小时"
         case .tokenLayer: return "token"
+        case .unitPrice: return "每亿 token"
+        case .unitPriceHelp: return "那天的花费 ÷ 那天的 token 量（命中 + 未命中 + 输出）× 1 亿。高峰时段长、缓存没命中，这个数就高。"
         case .menuRefresh: return "刷新"
         case .menuSettings: return "设置…"
         case .menuLogin: return "登录网页…"
@@ -196,11 +199,14 @@ enum T {
         case .missDash: return "Cache miss —"
         case .vsYesterday: return "vs yesterday"
         case .vsPreviousDay: return "vs previous day"
+        case .previousDay: return "previous day"
         case .runway: return "Balance lasts"
         case .runwayNoData: return "Needs a full day of data for the daily average"
         case .priceLine: return "Prices"
         case .hourChart: return "Top: spend per hour (green off-peak, orange peak, faded = not yet). Below: tokens for the same hour. Grey is the same hour yesterday."
         case .tokenLayer: return "tokens"
+        case .unitPrice: return "Per 100M tokens"
+        case .unitPriceHelp: return "The day's spend ÷ its tokens (cache hit + miss + output) × 100M. More peak hours or more cache misses push it up."
         case .menuRefresh: return "Refresh"
         case .menuSettings: return "Settings…"
         case .menuLogin: return "Sign in on the web…"
@@ -317,6 +323,18 @@ enum L {
     /// "余额还能撑 10 天" / "Balance lasts 10 days"
     static func runway(_ days: Int) -> String {
         Lang.current == .zh ? "\(T.runway.s) \(days) 天" : "\(T.runway.s) \(days) days"
+    }
+
+    /// 每亿单价后面那个对照：「（昨天 ¥5.82）」/ "(yesterday ¥5.82)"。
+    /// 不另起一行、不写百分点变化：单价差几个百分点没人读得出来。
+    static func unitPriceReference(_ money: String, relation: String) -> String {
+        switch Lang.current {
+        case .zh:
+            return "（\(relation) \(money)）"
+        case .en:
+            // 「Yesterday」是按钮上的写法，嵌进括号里要小写才不像句中另起一句。
+            return "(\(relation.prefix(1).lowercased())\(relation.dropFirst()) \(money))"
+        }
     }
 
     /// 高峰那一格的金额。中文把倍数写在括号里，英文用 "2× rate"。
