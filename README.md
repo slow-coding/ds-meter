@@ -1,6 +1,6 @@
 # DS Meter
 
-![banner](docs/banner.png)
+![banner](docs/banner.png?v=1.0.3)
 
 菜单栏里一格：一颗灯 + 今天花了多少钱。灯绿 = 闲时（半价），灯黄 = 高峰（双倍）。点开是明细。
 
@@ -161,8 +161,12 @@ swift build -c release
 .build/release/DSMeter --probe --fresh --snapshot /tmp/dsm                    # 「第一次打开」那屏
 .build/release/DSMeter --probe --fresh --settings-shot --snapshot /tmp/dsm    # 设置页
 .build/release/DSMeter --probe --login-check --snapshot /tmp/dsm              # 登录窗口自检
+.build/release/DSMeter --probe --demo --scale 3 --snapshot /tmp/dsm \
+  && cp /tmp/dsm/panel.png docs/panel.png                                      # README 那张面板图（假数据）
 swift scripts/make-banner.swift                                                # 重新生成 banner
 ```
+
+README 里的图全部来自 `--demo`（假数据），不放真机截图：余额、今日花费、token 量、菜单栏、壁纸一旦进了仓库和 git 历史就是公开的，删掉也还按 SHA 取得到。
 
 ## License
 
@@ -327,6 +331,8 @@ swift build -c release
 .build/release/DSMeter --probe --fresh --snapshot /tmp/dsm                   # the "first launch" screen
 .build/release/DSMeter --probe --fresh --settings-shot --snapshot /tmp/dsm   # the settings window
 .build/release/DSMeter --probe --login-check --snapshot /tmp/dsm             # opens the sign-in window
+.build/release/DSMeter --probe --demo --scale 3 --snapshot /tmp/dsm \
+  && cp /tmp/dsm/panel.png docs/panel.png                                     # the README panel image (demo data)
 swift scripts/make-banner.swift                                              # regenerate the banner
 
 ./scripts/package-release.sh                                                 # build a dmg + SHA256SUMS
@@ -334,6 +340,8 @@ REPO=owner/ds-meter ./scripts/package-release.sh                             # a
 ```
 
 Packaging details live in [`packaging/README.md`](packaging/README.md).
+
+All images in the README are rendered from `--demo` (fake data). No real screenshots: balance, spend, token counts, menu bar and wallpaper are public the moment they land in a repo, and stay retrievable by SHA after removal.
 
 ## License
 

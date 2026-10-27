@@ -6,6 +6,9 @@ import SwiftUI
 ///   DSMeter --probe --demo --snapshot 目录   假数据出图（不读凭据）
 ///   DSMeter --probe --login-check [--snapshot 目录]   打开登录窗口，看页面开没开
 enum Probe {
+    /// 出图倍数：`--scale N` 改，默认 2（retina）。
+    private static var captureScale: CGFloat = 2
+
     /// 昨天同一时刻的未命中率：取不到就是 -1。写成函数是为了不在字典字面量里塞 Optional.flatMap。
     private static func yesterdayMissRate(_ snap: Snapshot) -> Double {
         guard let day = snap.days[1], let hit = day.hitRate else { return -1 }
@@ -55,6 +58,11 @@ enum Probe {
 
         let demo = arguments.contains("--demo")
         let fresh = arguments.contains("--fresh")
+        // 出图倍数：默认 2（retina）。docs 里那张还要缩到 banner 里，用 3 才不糊（--scale 3）。
+        if let index = arguments.firstIndex(of: "--scale"), index + 1 < arguments.count,
+           let value = Double(arguments[index + 1]), value > 0 {
+            captureScale = CGFloat(value)
+        }
         if fresh { Account.ignoreStoredCredentials = true }
         let loggedOut = arguments.contains("--logged-out")
         let meter = Meter()
@@ -271,11 +279,11 @@ enum Probe {
         }
     }
 
-    /// 把一块视图按 2 倍存成 PNG。
+    /// 把一块视图按 captureScale 倍存成 PNG（默认 2 倍）。
     private static func capture(_ view: NSView) -> (size: NSSize, png: Data) {
         let width = view.bounds.width
         let height = view.bounds.height
-        let scale: CGFloat = 2
+        let scale: CGFloat = captureScale
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: Int(width * scale),
