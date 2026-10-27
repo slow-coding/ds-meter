@@ -56,60 +56,50 @@ func draw(size: CGFloat) -> Data? {
     body.fill()
     NSGraphicsContext.restoreGraphicsState()
 
-    // 深色底：上面偏亮、下面更黑
-    NSGradient(colors: [
-        NSColor(srgbRed: 0.153, green: 0.169, blue: 0.208, alpha: 1),
-        NSColor(srgbRed: 0.055, green: 0.063, blue: 0.078, alpha: 1),
-    ])?.draw(in: body, angle: -90)
+    // 深灰底：不是纯黑，也不带渐变，柱子是唯一的颜色
+    NSColor(srgbRed: 0.086, green: 0.094, blue: 0.110, alpha: 1).setFill()
+    body.fill()
 
-    // 上缘一道高光 + 一圈发丝边
-    NSGraphicsContext.saveGraphicsState()
-    body.addClip()
-    NSGradient(colors: [
-        NSColor.white.withAlphaComponent(0.10),
-        NSColor.white.withAlphaComponent(0.0),
-    ])?.draw(in: NSRect(x: 100, y: 512, width: 824, height: 412), angle: -90)
-    NSGraphicsContext.restoreGraphicsState()
-
-    NSColor.white.withAlphaComponent(0.08).setStroke()
-    body.lineWidth = 3
-    body.stroke()
+    // 发丝边：一圈很淡的同色，只为在黑底上留个轮廓
+    let border = NSBezierPath(roundedRect: NSRect(x: 101, y: 101, width: 822, height: 822), xRadius: 183, yRadius: 183)
+    NSColor.white.withAlphaComponent(0.09).setStroke()
+    border.lineWidth = 2
+    border.stroke()
 
     // 柱状图：五根柱子（绿＝闲时、橙＝高峰），底下一条基线
-    let variant = ProcessInfo.processInfo.environment["ICON_VARIANT"] ?? "1"
     let bottom: CGFloat = 292
-    let barWidth: CGFloat
-    let gap: CGFloat
-    let heights: [CGFloat]
-    let colors: [NSColor]
-    switch variant {
-    case "2":   // 五根，一路往上，最后那根橙
-        barWidth = 108; gap = 38
-        heights = [240, 330, 420, 510, 600]
-        colors = [offPeak, offPeak, offPeak, offPeak, peak]
-    default:    // 三根，一路往上，最后那根橙；四周留足空气
-        barWidth = 120; gap = 58
-        heights = [236, 354, 472]
-        colors = [offPeak, offPeak, peak]
-    }
+    let barWidth: CGFloat = 120
+    let gap: CGFloat = 58
+    let heights: [CGFloat] = [236, 354, 472]
+    let colors: [NSColor] = [offPeak, offPeak, peak]
     let total = CGFloat(heights.count) * barWidth + CGFloat(heights.count - 1) * gap
     let left = 512 - total / 2
 
     for (index, height) in heights.enumerated() {
         let x = left + CGFloat(index) * (barWidth + gap)
         let rect = NSRect(x: x, y: bottom, width: barWidth, height: height)
-        let bar = NSBezierPath(roundedRect: rect, xRadius: 32, yRadius: 32)
-        colors[index].setFill()
-        bar.fill()
+        let bar = NSBezierPath(roundedRect: rect, xRadius: 38, yRadius: 38)
+
+        // 柱身：上浅下深，像被上面的光打到
+        let base = colors[index]
+        NSGradient(colors: [
+            base.blended(withFraction: 0.12, of: .white) ?? base,
+            base,
+        ])?.draw(in: bar, angle: -90)
+
+        // 上缘压一道很细的高光，边界就利落了
+        NSGraphicsContext.saveGraphicsState()
+        bar.addClip()
+        NSColor.white.withAlphaComponent(0.10).setFill()
+        NSBezierPath(rect: NSRect(x: rect.minX, y: rect.maxY - 3, width: rect.width, height: 3)).fill()
+        NSGraphicsContext.restoreGraphicsState()
     }
 
-    let baseline = NSBezierPath(
-        roundedRect: NSRect(x: left, y: bottom - 34, width: total, height: 9),
-        xRadius: 4.5,
-        yRadius: 4.5
-    )
     NSColor.white.withAlphaComponent(0.12).setFill()
-    baseline.fill()
+    NSBezierPath(
+        roundedRect: NSRect(x: left, y: bottom - 34, width: total, height: 6),
+        xRadius: 3, yRadius: 3
+    ).fill()
 
     NSGraphicsContext.restoreGraphicsState()
     return rep.representation(using: .png, properties: [:])
