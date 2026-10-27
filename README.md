@@ -74,11 +74,15 @@ dmg 是 universal（Apple Silicon + Intel），macOS 13+。
 ### 方式二：Homebrew
 
 ```bash
-brew install --cask <账号>/ds-meter/ds-meter
+brew tap slow-coding/ds-meter
+brew trust slow-coding/ds-meter      # 新版 Homebrew 要求显式信任第三方 tap
+brew install --cask ds-meter
 ```
 
-brew 用自己的下载器，文件不带 quarantine 标记，所以装完直接能开，不用放行。升级：`brew upgrade --cask ds-meter`。
+升级：`brew upgrade --cask ds-meter`。
 
+> 实测（macOS 27 + Homebrew 7）：brew 装出来的 app 虽然带 `com.apple.quarantine`，但系统对包管理器这一类不弹窗，直接能开；浏览器下载的 dmg 会弹。这条行为随 macOS 版本变，真被拦了就按方式一放行。
+>
 > cask 放在个人 tap 里，Homebrew 官方不审核。它只指向同一个 dmg，`sha256` 由 CI 从那个 dmg 算出来，和 Release 里的 `SHA256SUMS` 一致。
 
 ### 方式三：源码
@@ -247,11 +251,15 @@ The dmg is universal (Apple Silicon + Intel), macOS 13+.
 ### Option 2: Homebrew
 
 ```bash
-brew install --cask <user>/ds-meter/ds-meter
+brew tap slow-coding/ds-meter
+brew trust slow-coding/ds-meter      # recent Homebrew requires explicit trust for third-party taps
+brew install --cask ds-meter
 ```
 
-Homebrew downloads with its own client, so the app carries no quarantine flag and Gatekeeper does not prompt. Upgrade with `brew upgrade --cask ds-meter`.
+Upgrade with `brew upgrade --cask ds-meter`.
 
+> Measured on macOS 27 + Homebrew 7: the app installed by brew does carry `com.apple.quarantine`, but macOS does not prompt for package-manager downloads; browser downloads do. This behaviour changes across macOS releases — if you do get blocked, use the override in Option 1.
+>
 > The cask lives in a personal tap and is not reviewed by Homebrew. It points to the same dmg; its `sha256` is computed by CI from that dmg and matches `SHA256SUMS`.
 
 ### Option 3: from source

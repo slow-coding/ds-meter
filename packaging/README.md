@@ -5,7 +5,7 @@
 ## 一个产物，两条通道
 
 - **dmg**：`dist/DS-Meter-<版本>.dmg`，universal（arm64 + x86_64），**ad-hoc 签名**（`codesign --sign -`），没有任何人的证书，也没有公证。
-- **Homebrew cask**：`dist/ds-meter.rb`，指向同一个 dmg，带 sha256。brew 下载不带 quarantine 标记，所以装完不用过 Gatekeeper。
+- **Homebrew cask**：`dist/ds-meter.rb`，指向同一个 dmg，带 sha256。实测 brew 装出来虽然带 quarantine 标记，但 macOS 不弹窗（包管理器这一类）；浏览器下载的 dmg 会弹。
 
 ## 在本地打一版
 
@@ -40,7 +40,9 @@ homebrew-ds-meter/
 每次发版：把 Release 里的 `ds-meter.rb` 拷进 `Casks/`，提交。用户这样装（不用先 `brew tap`）：
 
 ```bash
-brew install --cask <账号>/ds-meter/ds-meter
+brew tap <账号>/ds-meter
+brew trust <账号>/ds-meter
+brew install --cask ds-meter
 ```
 
 以后想自动化：在那个 tap 仓库里加一个 workflow，用 `workflow_dispatch` 收 release 产物，或者给主仓一个只对 tap 有写权限的 deploy key。别把个人 token 放进主仓的 secrets。
