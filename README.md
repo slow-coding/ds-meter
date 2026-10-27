@@ -12,6 +12,8 @@
 
 ## 30 秒上手（已经有 Xcode 命令行工具）
 
+没有命令行工具就先跑 `xcode-select --install`，装完再回来（见下面「装」那一节的必备组件表）。
+
 ```bash
 git clone <仓库地址> ds-meter && cd ds-meter && ./scripts/build-app.sh
 open "/Applications/DS Meter.app"
@@ -46,20 +48,43 @@ open "/Applications/DS Meter.app"
 2. **账单**：DeepSeek 没有开放账单 API；网页的用量页靠浏览器里的一串登录凭证取数。app 在自己的窗口里让你登录一次，拿到那串凭证，之后替你去读同一份账单。
 3. **所以**：不登录只有余额；登录了才有今天花了多少、每小时、分模型、命中率。凭证只存本机，只发给 `platform.deepseek.com`。
 
-## 装
+## 装（必备组件 + 编译）
 
-- macOS 13+，Apple Silicon / Intel 都行
-- Xcode 命令行工具：`xcode-select --install`（一次，几个 GB；装过就跳过）
+**只发源码，不发签名的包。** 仓库和 Release 里没有 `.app`、没有 `.dmg`、没有公证过的二进制——你拿到的是代码；自己编出来的 app 用 `codesign -s -` 做本机 ad-hoc 签名，不存在「信不信作者的包」这回事。
+
+### 必备组件
+
+| 要什么 | 怎么确认 | 怎么装 |
+| --- | --- | --- |
+| macOS 13 或更新 | `sw_vers -productVersion` | 系统更新 |
+| Xcode 命令行工具（`swift`、`clang`、`git` 都在里面） | `xcode-select -p` 有输出 | `xcode-select --install`，弹窗里点安装；约 2–5 GB，5–15 分钟 |
+| 2 GB 空闲磁盘 | — | — |
+
+不需要 Node、Python、Homebrew，也不需要付费的 Apple 开发者账号。Apple Silicon / Intel 都行。
 
 ```bash
 git clone <仓库地址> ds-meter
 cd ds-meter
 ./scripts/build-app.sh     # 编 + 装进 /Applications，约 10 秒
+open "/Applications/DS Meter.app"
 ```
 
-只发源码，仓库和 Release 里都没有 `.app` / `.dmg`：自己编，就没有「信不信作者的二进制」这回事。默认 ad-hoc 签名；有自己的证书就 `SIGN_ID="Apple Development: 你的名字 (XXXXXXXXXX)" ./scripts/build-app.sh`。
+`xcode-select --install` 必须等它装完再编，否则会报 `swift: command not found`。
 
-第一次运行会在「登录项」里注册开机自启，可以关。卸载：`./scripts/uninstall.sh`。
+### 签名是怎么回事
+
+- 默认 **ad-hoc 签名**（`codesign --sign -`）：本机编、本机用，完全够用；每次重编签名会变，但 app 不碰钥匙串，不会因此弹密码框。
+- 想固定签名就用自己的证书：`SIGN_ID="Apple Development: 你的名字 (XXXXXXXXXX)" ./scripts/build-app.sh`。
+- 我们**不提供签名包、不做公证**：那需要每年 99 美元的 Apple Developer Program，而且等于让你信任作者的一张证书。源码 + 本地编译是更干净的路径。
+- 本地编出来的 app 没有 `com.apple.quarantine` 标记，Gatekeeper 不会拦。
+
+第一次运行会在「登录项」里注册开机自启，可以关。卸载：`./scripts/uninstall.sh`（应用、自启、凭据、登录态、缓存一起清）。
+
+### 常见问题
+
+- `swift: command not found` → 命令行工具没装好，重跑 `xcode-select --install`。
+- `xcodebuild: error: tool requires Xcode` → 装了完整 Xcode 但没同意协议：`sudo xcodebuild -license accept`。
+- 想只在终端里跑、不装 app：`swift build -c release` 之后用 `.build/release/DSMeter`。
 
 ## 两种用法
 
@@ -162,20 +187,43 @@ The date button unrolls the last 30 days as a strip; click a day to inspect it:
 2. **Billing**: DeepSeek has no public billing API. Its usage page reads data using a sign-in token stored in the browser. The app opens its own sign-in window once, takes that token, and reads the same billing numbers for you.
 3. **Therefore**: without signing in you only get the balance; with it you get today's spend, hourly bars, per-model costs and cache-hit rate.
 
-## Requirements
+## Install (prerequisites + build)
 
-- macOS 13 or later, Apple Silicon or Intel.
-- Xcode command line tools: `xcode-select --install` (one time, a few GB).
+**Source only — no signed packages.** There is no `.app`, no `.dmg` and no notarized binary in the repo or in Releases. You get code; the app you build is signed ad-hoc (`codesign --sign -`) on your own machine, so nobody has to trust anyone else's binary.
+
+### Prerequisites
+
+| Need | Check | Install |
+| --- | --- | --- |
+| macOS 13 or later | `sw_vers -productVersion` | system update |
+| Xcode command line tools (`swift`, `clang`, `git`) | `xcode-select -p` prints a path | `xcode-select --install` (2–5 GB, 5–15 min) |
+| ~2 GB free disk | — | — |
+
+No Node, no Python, no Homebrew, no paid Apple Developer account required. Apple Silicon and Intel both work.
 
 ```bash
 git clone <repo> ds-meter
 cd ds-meter
 ./scripts/build-app.sh
+open "/Applications/DS Meter.app"
 ```
 
-Source only: no `.app` or `.dmg` in the repo or in Releases, so nobody has to trust a binary someone else built. Ad-hoc signing by default; bring your own certificate with `SIGN_ID="Apple Development: Your Name (XXXXXXXXXX)" ./scripts/build-app.sh`.
+Wait for `xcode-select --install` to finish before building, or you will get `swift: command not found`.
 
-The first run registers a login item (can be turned off). Uninstall with `./scripts/uninstall.sh`.
+### About signing
+
+- Ad-hoc signing by default: fine for building and running on your own Mac. The signature changes on every rebuild, but the app does not touch the Keychain, so nothing prompts for a password.
+- Bring your own certificate if you want a stable identity: `SIGN_ID="Apple Development: Your Name (XXXXXXXXXX)" ./scripts/build-app.sh`.
+- We do **not** ship signed or notarized builds: that needs a $99/year Apple Developer Program membership and asks you to trust the author's certificate. Source plus a local build is the cleaner path.
+- A locally built app carries no `com.apple.quarantine` flag, so Gatekeeper does not block it.
+
+The first run registers a login item (can be turned off). Uninstall with `./scripts/uninstall.sh`, which removes the app, the login item, credentials, the web sign-in state and caches.
+
+### Troubleshooting
+
+- `swift: command not found` → command line tools are not installed: rerun `xcode-select --install`.
+- `xcodebuild: error: tool requires Xcode` → full Xcode installed but the license not accepted: `sudo xcodebuild -license accept`.
+- Just want the binary, no app: `swift build -c release`, then run `.build/release/DSMeter`.
 
 ## Two ways to use it
 
