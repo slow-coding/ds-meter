@@ -30,7 +30,7 @@ enum T {
     case setupTitle, setupBody, loginExpiredBody, setupBalanceOnly, loginStaysLocal
     case vsYesterday, vsPreviousDay
     case runway, runwayNoData, priceLine
-    case hourChart, tokenLayer, peakHelp
+    case hourChart, tokenLayer
 
     // 菜单
     case menuRefresh, menuSettings, menuLogin, menuUsage, menuPricing, menuQuit, menuAutoStart, statusTooltip
@@ -96,7 +96,6 @@ enum T {
         case .priceLine: return "价格"
         case .hourChart: return "上面一层是每小时花了多少（绿闲时、橙高峰，淡的是还没到的时段），下面一层是同一小时的 token 量；灰的是前一天同一小时"
         case .tokenLayer: return "token"
-        case .peakHelp: return "高峰：北京时间工作日 9–12、14–18（法定节假日除外），单价是闲时的"
         case .menuRefresh: return "刷新"
         case .menuSettings: return "设置…"
         case .menuLogin: return "登录网页…"
@@ -202,7 +201,6 @@ enum T {
         case .priceLine: return "Prices"
         case .hourChart: return "Top: spend per hour (green off-peak, orange peak, faded = not yet). Below: tokens for the same hour. Grey is the same hour yesterday."
         case .tokenLayer: return "tokens"
-        case .peakHelp: return "Peak: Beijing time weekdays 9–12 and 14–18 (public holidays excepted). Peak unit price is"
         case .menuRefresh: return "Refresh"
         case .menuSettings: return "Settings…"
         case .menuLogin: return "Sign in on the web…"
@@ -307,9 +305,13 @@ enum L {
         return text
     }
 
-    /// "近 30 天 ¥1,578.39" / "30 days ¥1,578.39"（页脚用）
-    static func recent30(_ money: String) -> String {
-        "\(T.last30.s) \(money)"
+    /// 高峰那一格的悬停说明。整句一起写：以前在调用处拼「半句 + 倍数 + 。
+    /// 结果英文模式下句尾挂着一个中文句号。
+    static func peakHelp() -> String {
+        let multiplier = PeakHours.multiplierLabel
+        return Lang.current == .zh
+            ? "高峰：北京时间工作日 9–12、14–18（法定节假日除外），单价是闲时的 \(multiplier)。"
+            : "Peak: Beijing time weekdays 9–12 and 14–18 (public holidays excepted). Unit price is \(multiplier) the off-peak price."
     }
 
     /// "余额还能撑 10 天" / "Balance lasts 10 days"

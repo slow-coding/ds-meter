@@ -31,6 +31,13 @@ struct MeterPanel: View {
     /// 展开/收起那条的曲线：单调、不弹跳。带弹性的曲线会把高度顶过头再收回来，看着像抖。
     static let pickerAnimation = Animation.easeOut(duration: 0.18)
 
+    /// 点面板上别的地方也把那条收起来：开着的时候点图、点分模型、点页脚，都该收。
+    /// （日期钮和柱子自己有手势，不走这条。）
+    private func closePicker() {
+        guard showingPicker else { return }
+        withAnimation(Self.pickerAnimation) { showingPicker = false }
+    }
+
     /// 自检渲染时直接把那条 30 天展开，不用点。
     var pickerStartOpen: Bool = false
     @State private var hoveringDate = false
@@ -46,19 +53,24 @@ struct MeterPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !setupNeeded {
-                Text(T.balance.s).font(Style.body).foregroundStyle(.secondary)
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(meter.balance.amount.map(Fmt.money) ?? "—")
-                    .font(Style.hero)
-                    .monospacedDigit()
-                Spacer(minLength: 12)
-                nowTone
-                Text(balanceStamp)
-                    .font(Style.body)
-                    .foregroundStyle(.tertiary)
-                    .help(T.balanceHelp.s)
+                // 余额这块点一下也收起那条（整块当成「别的地方」；
+                // 用 VStack 不用 Group：Group 的修饰符是一人一份，两个元素之间的空隙点不着）
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(T.balance.s).font(Style.body).foregroundStyle(.secondary)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(meter.balance.amount.map(Fmt.money) ?? "—")
+                            .font(Style.hero)
+                            .monospacedDigit()
+                        Spacer(minLength: 12)
+                        nowTone
+                        Text(balanceStamp)
+                            .font(Style.body)
+                            .foregroundStyle(.tertiary)
+                            .help(T.balanceHelp.s)
+                    }
+                    .padding(.top, 2)
                 }
-                .padding(.top, 2)
+                .dismissesPicker(closePicker)
             }
 
             if meter.needsLogin {
@@ -86,7 +98,23 @@ struct MeterPanel: View {
                             .lineLimit(1)
                     }
                     .frame(minWidth: 58, alignment: .leading)
+                    .dismissesPicker(closePicker)
                     Spacer(minLength: 8)
+                    if let total = meter.snap.totalRecent {
+                        // 跟左边那摞同一个顺序（金额在上、小字在下），两个金额落在同一条基线上。
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(Fmt.money(total))
+                                .font(Style.value)
+                                .monospacedDigit()
+                                .lineLimit(1)
+                            Text(T.last30.s)
+                                .font(.system(size: 8.5))
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                        .help(T.last30.s)
+                        .dismissesPicker(closePicker)
+                    }
                 }
                 .padding(.top, 12)
 
@@ -104,9 +132,9 @@ struct MeterPanel: View {
                 .opacity(showingPicker ? 1 : 0)
                 .padding(.top, showingPicker ? 10 : 0)
 
-                chart.padding(.top, 12)
+                chart.padding(.top, 12).dismissesPicker(closePicker)
 
-                splitColumns.padding(.top, 12)
+                splitColumns.padding(.top, 12).dismissesPicker(closePicker)
 
                 if modelSlots > 0 {
                     VStack(alignment: .leading, spacing: 7) {
@@ -124,14 +152,19 @@ struct MeterPanel: View {
                         }
                     }
                     .padding(.top, 12)
+                    .dismissesPicker(closePicker)
                 }
 
-                footer.padding(.top, 13)
+                footer.padding(.top, 13).dismissesPicker(closePicker)
             }
         }
         .padding(Layout.padding)
         .frame(width: Layout.panelWidth)
         .onAppear { Timing.mark("面板 onAppear") }
+        // 面板被收起（点外面 / Esc / 失焦）时把那条一起收掉，不留到下次
+        .onReceive(NotificationCenter.default.publisher(for: .dsMeterPanelClosed)) { _ in
+            showingPicker = false
+        }
     }
 
     // MARK: - 哪一天：今日 / 昨天两颗按钮，其余日子收在日期按钮的日历里
@@ -438,7 +471,7 @@ struct MeterPanel: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .help("\(T.peakHelp.s) \(PeakHours.multiplierLabel)。")
+            .help(L.peakHelp())
 
             VStack(alignment: .leading, spacing: 5) {
                 statLine(dot: Style.hit) {
@@ -504,13 +537,6 @@ struct MeterPanel: View {
 
     private var footer: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            if let total = meter.snap.totalRecent {
-                Text(L.recent30(Fmt.money(total)))
-                    .font(Style.body)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .help(T.last30.s)
-            }
             Text(runwayText).font(Style.body).foregroundStyle(.secondary)
             Spacer(minLength: 8)
             Button {
@@ -602,5 +628,12 @@ enum DateFormat {
     static func short(_ isoDay: String) -> String {
         let parts = isoDay.split(separator: "-")
         return parts.count == 3 ? "\(parts[1])-\(parts[2])" : isoDay
+    }
+}
+
+private extension View {
+    /// 让一块区域可点：点了就调 `action`（面板上「别的地方」都长这样）。
+    func dismissesPicker(_ action: @escaping () -> Void) -> some View {
+        contentShape(Rectangle()).onTapGesture(perform: action)
     }
 }

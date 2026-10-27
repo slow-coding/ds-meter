@@ -232,10 +232,13 @@ extension AppDelegate: NSPopoverDelegate {
     /// 点外面、按 Esc 都会走到这里（不只是我们自己的 performClose），统一在这停掉快节奏。
     func popoverDidClose(_ notification: Notification) {
         stopPanelRefresh()
+        // 面板收了就把那条 30 天也收掉：下次点开不该还开着上回那条。
+        NotificationCenter.default.post(name: .dsMeterPanelClosed, object: nil)
     }
 }
 
 extension Notification.Name {
     /// 面板里的「打开账号…」按钮：面板 hosted 在 AppDelegate 里，用通知喊一声。
     static let dsMeterOpenSettings = Notification.Name("DSMeterOpenSettings")
+    static let dsMeterPanelClosed = Notification.Name("DSMeterPanelClosed")
 }
