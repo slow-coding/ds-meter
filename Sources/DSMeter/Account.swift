@@ -14,7 +14,8 @@ enum Account {
 
     static var apiKey: String? {
         if ignoreStoredCredentials { return nil }
-        return stored()["apiKey"].flatMap { $0.isEmpty ? nil : $0 } ?? envKey()
+        if let stored = stored()["apiKey"], !stored.isEmpty { return stored }
+        return envKey()
     }
 
     static var consoleToken: String? {

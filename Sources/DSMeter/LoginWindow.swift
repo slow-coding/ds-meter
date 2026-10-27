@@ -139,8 +139,12 @@ final class LoginWindow: NSObject, NSWindowDelegate {
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
         let path = object["p"] as? String ?? ""
-        let token = (object["t"] as? String).flatMap { token(from: $0) }
-        return PageState(path: path, token: token)
+        // 不用 Optional.flatMap：老一档的 Swift 编译器在这里推不出类型（CI 上就是栽在这行）。
+        var parsed: String?
+        if let stored = object["t"] as? String {
+            parsed = token(from: stored)
+        }
+        return PageState(path: path, token: parsed)
     }
 
     /// 站点把 token 存成一个 JSON 字符串（`{"value":"..."}`），未登录时是 `{"value":null}`；

@@ -6,6 +6,12 @@ import SwiftUI
 ///   DSMeter --probe --demo --snapshot 目录   假数据出图（不读凭据）
 ///   DSMeter --probe --login-check [--snapshot 目录]   打开登录窗口，看页面开没开
 enum Probe {
+    /// 昨天同一时刻的未命中率：取不到就是 -1。写成函数是为了不在字典字面量里塞 Optional.flatMap。
+    private static func yesterdayMissRate(_ snap: Snapshot) -> Double {
+        guard let day = snap.days[1], let hit = day.hitRate else { return -1 }
+        return 1 - hit
+    }
+
     static func run(arguments: [String]) -> Never {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.accessory)
@@ -103,7 +109,7 @@ enum Probe {
             "yesterdayHitRate": meter.snap.days[1]?.hitRate ?? -1,
             "moneyComplete": meter.snap.moneyComplete,
             "avgDaily": meter.snap.avgDaily ?? -1,
-            "yesterdayMissRate": meter.snap.days[1].flatMap { $0.hitRate.map { 1 - $0 } } ?? -1,
+            "yesterdayMissRate": yesterdayMissRate(meter.snap),
             "avgDays": meter.snap.avgDays,
             "requests": meter.snap.today.requests,
             "miss": meter.snap.today.miss,
