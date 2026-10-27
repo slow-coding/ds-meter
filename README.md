@@ -45,6 +45,7 @@ open "/Applications/DS Meter.app"
 - **不读你的内容**：不读对话、不读会话日志、不读别的 app 的数据。账单响应只在内存里（磁盘缓存关掉了），不落盘。
 - **可以自己核**：源码两千多行，`--probe` 会把当前所有数字打出来；Little Snitch 之类的工具看它只连那两个域名。
 - **诚实的边界**：登录态等于你账号的钥匙，Mac 被攻破就能被读走——跟浏览器里的 cookie 是同一级风险。所以给了「退出网页登录」，也建议不用时点一下。
+- 完整的安全说明、威胁模型和自查命令见 [`SECURITY.md`](SECURITY.md)；每次 push / PR / 发版都会跑 `scripts/security-audit.sh`。
 
 ## 它怎么工作（三句话）
 
@@ -222,6 +223,7 @@ The date button unrolls the last 30 days as a strip; click a day to inspect it:
 - **Your content is never read**: no conversations, no session logs, no other apps' data. Billing responses live in memory only (disk cache is disabled).
 - **Verify it yourself**: ~2.6k lines of source, `--probe` prints every number it holds, Little Snitch shows only those two hosts.
 - **Honest limit**: the sign-in token is effectively an account key. If your Mac is compromised, it can be read — same risk class as browser cookies. That is why "Sign out of web" exists.
+- Full security notes, threat model and self-check commands: [`SECURITY.md`](SECURITY.md). `scripts/security-audit.sh` runs on every push, PR and release.
 
 ## How it works (in three sentences)
 

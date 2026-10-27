@@ -27,6 +27,9 @@ jobs:
           sw_vers
           swift --version
 
+      - name: 安全体检（不过就不出包）
+        run: ./scripts/security-audit.sh
+
       - name: 打包（universal，ad-hoc）
         env:
           REPO: ${{ github.repository }}

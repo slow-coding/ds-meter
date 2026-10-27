@@ -1,0 +1,16 @@
+name: audit
+
+# 每次 push / PR 都跑一遍安全体检：凭据形态、全部历史对象、域名白名单、依赖、日志调用。
+on:
+  push:
+  pull_request:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Security audit
+        run: ./scripts/security-audit.sh
