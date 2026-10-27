@@ -1,0 +1,13 @@
+.build/
+*.dSYM/
+.DS_Store
+.lab/
+build/
+
+# 只发源码：仓库里不放任何打包产物（.app / .dmg 都带着打包那台机器的签名）
+*.app
+*.dmg
+*.pkg
+*.ipa
+*.zip
+dist/

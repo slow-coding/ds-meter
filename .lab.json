@@ -1,0 +1,5 @@
+{
+  "gate": "swift build -c release --arch arm64 --scratch-path \"$HOME/Library/Caches/ds-meter/swiftpm\"",
+  "gateTimeout": 300,
+  "note": "收尾前跑这一条（就是编译）。界面观感、胶囊压菜单栏的实际效果、悬停展开的手感，gate 管不到，写进未验证清单。"
+}
