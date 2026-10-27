@@ -318,7 +318,7 @@ final class Meter: ObservableObject {
             return 1 + (unit - 0.5) * 2 * spread
         }
 
-        func bill(scale: Double, density: Double = 1) -> PlatformClient.DayBill {
+        func bill(scale: Double, density: Double = 1, hitDrop: Double = 0) -> PlatformClient.DayBill {
             var bill = PlatformClient.DayBill()
             for hour in 0..<24 {
                 let cost = (shape[hour] * scale * jitter(0.12) * 100).rounded() / 100
@@ -330,17 +330,18 @@ final class Meter: ObservableObject {
             let pro = ((total - flash) * 100).rounded() / 100
             bill.modelCost = ["deepseek-flash": flash, "deepseek-v4-pro": pro]
             let tokens = total * 13_000_000 * density
+            // hitDrop：那天命中的份额比基准差多少（假数据里每天不一样，命中率那行才有「比昨天」可看）
             bill.tokens = [
                 "deepseek-flash": .init(
                     requests: Int(total * 330),
-                    miss: Int(tokens * 0.96 * 0.03),
-                    hit: Int(tokens * 0.96 * 0.97),
+                    miss: Int(tokens * 0.96 * (0.03 + hitDrop)),
+                    hit: Int(tokens * 0.96 * (0.97 - hitDrop)),
                     response: Int(tokens * 0.96 * 0.12)
                 ),
                 "deepseek-v4-pro": .init(
                     requests: Int(total * 9),
-                    miss: Int(tokens * 0.04 * 0.08),
-                    hit: Int(tokens * 0.04 * 0.92),
+                    miss: Int(tokens * 0.04 * (0.08 + hitDrop)),
+                    hit: Int(tokens * 0.04 * (0.92 - hitDrop)),
                     response: Int(tokens * 0.04 * 0.15)
                 ),
             ]
@@ -354,10 +355,12 @@ final class Meter: ObservableObject {
         // 每天「一块钱换来多少 token」不一样（缓存命中率高就换得多），所以每亿 token 的单价天天不同：
         // 截图上那个括号里的对照才看得出变化，否则假数据里每天都一样。
         let densities: [Double] = [0.86, 0.94, 0.78, 1.05, 0.91, 0.83, 1.02]
+        // 每天命中率也不一样：差 2 个百分点就等于「比昨天 +2.0%」，那行括号里才有对比。
+        let hitDrops: [Double] = [0.022, 0.014, 0.031, 0.008, 0.019, 0.026, 0.011]
         for (index, scale) in scales.enumerated() {
             let offset = index + 1
             next.days[offset] = DayCost(
-                bill: bill(scale: scale, density: densities[index % densities.count]),
+                bill: bill(scale: scale, density: densities[index % densities.count], hitDrop: hitDrops[index % hitDrops.count]),
                 weekday: PeakHours.weekday(of: PeakHours.daysBefore(offset))
             )
         }

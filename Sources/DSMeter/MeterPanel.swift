@@ -15,6 +15,19 @@ enum Style {
     /// token 那张柱子图的配色：跟钱那张分开（钱是绿 / 橙），免得两张图看混。
     static let tokenOffPeak = Color(red: 0.38, green: 0.66, blue: 0.72)
     static let tokenPeak = Color(red: 0.56, green: 0.49, blue: 0.84)
+
+    /// 命中率后面那串对比的颜色：涨了蓝、跌了黄。
+    /// 浅色底上不能直接用上面那两个值——亮蓝和白字旁的黄在小字号上读不清（白底对比 2.9:1），
+    /// 所以浅色模式压暗一档，深色模式保持原样（原色在黑底上本来就有 6:1 以上）。
+    /// 用传进来的 dark 而不是动态 NSColor：动态色在离屏渲染（浅色那张图）里不会跟着换，实测改不动。
+    static func delta(better: Bool, dark: Bool) -> Color {
+        if dark {
+            return better ? hit : miss
+        }
+        return better
+            ? Color(red: 0.10, green: 0.42, blue: 0.85)
+            : Color(red: 0.54, green: 0.38, blue: 0.00)
+    }
 }
 
 /// 面板的尺寸：只有这里写数，图那块按内容宽度算每一列的宽，不另抄一遍。
@@ -28,6 +41,8 @@ enum Layout {
 /// 上半是账单（余额口径，涵盖所有消费），下半是 pi 的明细（本机日志口径，能拆到模型）。
 struct MeterPanel: View {
     @ObservedObject var meter: Meter
+    /// 深色 / 浅色：只有对比色要按它挑一档深浅（见 Style.delta）。
+    @Environment(\.colorScheme) private var colorScheme
     /// 展开/收起那条的曲线：单调、不弹跳。带弹性的曲线会把高度顶过头再收回来，看着像抖。
     static let pickerAnimation = Animation.easeOut(duration: 0.18)
 
@@ -477,14 +492,28 @@ struct MeterPanel: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 statLine(dot: Style.hit) {
-                    Text(hitText(rate))
+                    HStack(spacing: 4) {
+                        Text(rate.map { "\(T.hit.s) \(Self.percent($0))" } ?? T.hitDash.s)
+                            .foregroundStyle(.secondary)
+                        if let delta = hitDelta {
+                            // 括号比主体小一号：这是注解，不是第二个数。
+                            Text(L.hitDelta(delta.text, relation: meter.selected == 0 ? T.vsYesterday.s : T.vsPreviousDay.s))
+                                .font(.system(size: 10))
+                                .foregroundStyle(Style.delta(better: delta.better, dark: colorScheme == .dark))
+                        }
+                    }
+                    .font(Style.body)
+                    .monospacedDigit()
+                }
+                .help(L.hitHelp())
+                proportionBar(leftShare: rate ?? 1, left: Style.hit, right: Style.miss, minRight: 3)
+                    .opacity(rate == nil ? 0.15 : 1)
+                statLine(dot: Style.miss) {
+                    Text(rate.map { "\(T.miss.s) \(Self.percent(1 - $0))" } ?? T.missDash.s)
                         .font(Style.body)
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
-                proportionBar(leftShare: rate ?? 1, left: Style.hit, right: Style.miss, minRight: 3)
-                    .opacity(rate == nil ? 0.15 : 1)
-                statLine(dot: Style.miss) { missLine(rate) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -497,19 +526,6 @@ struct MeterPanel: View {
             text()
                 .lineLimit(1)
         }
-    }
-
-    /// 未命中那一格：后面带着比前一天的变化，多了用未命中的黄、少了用命中的蓝。
-    private func missLine(_ rate: Double?) -> Text {
-        guard let rate else {
-            return Text(T.missDash.s).foregroundColor(.secondary)
-        }
-        var text = Text("\(T.miss.s) \(Self.percent(1 - rate))").foregroundColor(.secondary)
-        if let delta = missDelta {
-            text = text + Text(" (\(meter.selected == 0 ? T.vsYesterday.s : T.vsPreviousDay.s) \(delta.text))")
-                .foregroundColor(delta.worse ? Style.miss : Style.hit)
-        }
-        return text.font(Style.body).monospacedDigit()
     }
 
     /// 夹在标签之间的那根条：左段 / 右段按比例分宽度。
@@ -594,10 +610,10 @@ struct MeterPanel: View {
         }
     }
 
-    /// 那天的未命中率 - 前一天的未命中率，单位是百分点。最早的那天没有前一天，不摆。
-    private var missDelta: (text: String, worse: Bool)? {
+    /// 那天的命中率 - 前一天的命中率，单位是百分点。最早的那天没有前一天，不摆。
+    private var hitDelta: (text: String, better: Bool)? {
         guard let current = day.hitRate, let previous = shadow?.hitRate else { return nil }
-        let delta = (1 - current) - (1 - previous)
+        let delta = current - previous
         guard abs(delta) >= 0.001 else { return nil }
         return (String(format: "%+.1f%%", delta * 100), delta > 0)
     }
@@ -610,10 +626,6 @@ struct MeterPanel: View {
     /// 缓存里模型最多的那天决定摆几行，切日时这块高度不变。
     private var modelSlots: Int {
         min(3, meter.snap.days.values.map(\.models.count).max() ?? 0)
-    }
-
-    private func hitText(_ rate: Double?) -> String {
-        rate.map { T.hit.s + " " + Self.percent($0) } ?? T.hitDash.s
     }
 
     private static func percent(_ value: Double) -> String {

@@ -238,7 +238,13 @@ enum Probe {
 
     private static func render(meter: Meter, appearance: NSAppearance?,
                                pickerOpen: Bool = false) -> (size: NSSize, png: Data) {
-        let content = NSHostingView(rootView: MeterPanel(meter: meter, pickerStartOpen: pickerOpen))
+        // 离屏渲染时只给容器换了 appearance，SwiftUI 的 colorScheme 认的还是 NSApp 那一套
+        // （本机是深色），不显式指的话浅色那张图里「按明暗换色」的部分（Style.delta）会照深色画。
+        var root = AnyView(MeterPanel(meter: meter, pickerStartOpen: pickerOpen))
+        if let appearance, let scheme = colorScheme(of: appearance) {
+            root = AnyView(root.environment(\.colorScheme, scheme))
+        }
+        let content = NSHostingView(rootView: root)
         content.frame = NSRect(x: 0, y: 0, width: 480, height: 700)
         content.layoutSubtreeIfNeeded()
         let fitted = content.fittingSize
@@ -254,6 +260,15 @@ enum Probe {
         if let appearance { container.appearance = appearance }
         container.layoutSubtreeIfNeeded()
         return capture(container)
+    }
+
+    /// NSAppearance → SwiftUI 的 colorScheme（只有明暗两种要分）。
+    private static func colorScheme(of appearance: NSAppearance) -> ColorScheme? {
+        switch appearance.name {
+        case .aqua: return .light
+        case .darkAqua: return .dark
+        default: return nil
+        }
     }
 
     /// 把一块视图按 2 倍存成 PNG。

@@ -184,8 +184,8 @@ enum T {
         case .offPeakDash: return "Off-peak —"
         case .peakDash: return "Peak —"
         case .peakAllOffPeak: return "Peak — off-peak all day"
-        case .hit: return "Cache hit"
-        case .miss: return "Cache miss"
+        case .hit: return "Hit"
+        case .miss: return "Miss"
         case .hitDash: return "Cache hit —"
         case .loginTitle: return "Not signed in"
         case .loginExpiredTitle: return "Sign-in expired"
@@ -335,6 +335,18 @@ enum L {
             // 「Yesterday」是按钮上的写法，嵌进括号里要小写才不像句中另起一句。
             return "(\(relation.prefix(1).lowercased())\(relation.dropFirst()) \(money))"
         }
+    }
+
+    /// 命中那一列的悬停说明：命中率怎么算、括号里那串是什么单位。
+    static func hitHelp() -> String {
+        Lang.current == .zh
+            ? "命中率 = 命中 ÷（命中 + 未命中）。括号里是跟前一天比的百分点差。"
+            : "Cache hit rate = hit ÷ (hit + miss). The bracket is the change vs the previous day, in percentage points."
+    }
+
+    /// 命中率后面那串括号：(比昨天 +2.2%) / (vs yesterday +2.2%)
+    static func hitDelta(_ delta: String, relation: String) -> String {
+        Lang.current == .zh ? "（\(relation) \(delta)）" : "(\(relation) \(delta))"
     }
 
     /// 高峰那一格的金额。中文把倍数写在括号里，英文用 "2× rate"。
