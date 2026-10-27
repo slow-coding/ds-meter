@@ -10,7 +10,7 @@ CACHE="$HOME/Library/Caches/ds-meter/release"
 STAGE="$TMPDIR/ds-meter-release"
 DIST="dist"
 
-swift build -c release --arch arm64 --arch x86_64 --scratch-path "$CACHE" 2>&1 | tail -2
+swift build -c release --arch arm64 --arch x86_64 --scratch-path "$CACHE"
 BIN_DIR=$(swift build -c release --arch arm64 --arch x86_64 --scratch-path "$CACHE" --show-bin-path)
 BIN="$BIN_DIR/DSMeter"
 [ -x "$BIN" ] || { echo "没找到产物: $BIN"; exit 1; }
