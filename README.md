@@ -25,17 +25,9 @@ open "/Applications/DS Meter.app"
 
 然后：菜单栏那格 → 「登录网页读取」→ 登录 → 出数。
 
-| 1. 菜单栏那一格 | 2. 第一次打开 |
-| --- | --- |
-| ![菜单栏](docs/status.png) | ![第一次打开](docs/first-run.png) |
+点菜单栏那格，面板从上面掉下来：余额、今天 / 昨天、那天的每小时柱子和 token、闲时 / 高峰各花了多少、缓存命中率、分模型、还能撑几天。没登录时那里是一句话加一颗按钮。
 
-| 3. 登录窗口（app 自己的） | 4. 登录后的面板 |
-| --- | --- |
-| ![登录](docs/login.png) | ![面板](docs/panel.png) |
-
-日期按钮把最近 30 天铺成一条柱条，点哪天看哪天：
-
-![选日期](docs/panel-picker.png)
+日期按钮把最近 30 天铺成一条柱条，点哪天看哪天。
 
 ## 安全：全本地，没有服务器
 
@@ -127,9 +119,7 @@ open "/Applications/DS Meter.app"
 
 **登录（推荐）**：看账单。菜单栏 → 登录网页读取，或者直接在面板上点那颗按钮。
 
-**只填 API Key**：只看余额。右键 → 账号… → 贴 `sk-` 开头的 key：
-
-![设置](docs/settings.png)
+**只填 API Key**：只看余额。右键 → 账号… → 贴 `sk-` 开头的 key。设置页一共三格：通用（自启、刷新、语言）、账号（两串凭据）、关于（价目与数据说明）。
 
 两个都不填时，第一次启动会自动弹面板，只有两行字和一颗按钮（上图第 2 张）。
 
@@ -203,17 +193,9 @@ open "/Applications/DS Meter.app"
 
 Then: menu bar → **Sign in on web** → sign in → done.
 
-| 1. The menu bar item | 2. First launch |
-| --- | --- |
-| ![menu bar](docs/status.png) | ![first launch](docs/first-run.png) |
+Click the menu bar item and the panel drops down: balance, today / yesterday, that day's hourly bars and tokens, peak vs off-peak spend, cache-hit rate, per-model cost, and how many days the balance lasts. Before signing in it shows one sentence and one button.
 
-| 3. Sign-in window (inside the app) | 4. After signing in |
-| --- | --- |
-| ![sign in](docs/login.png) | ![panel](docs/panel.png) |
-
-The date button unrolls the last 30 days as a strip; click a day to inspect it:
-
-![date strip](docs/panel-picker.png)
+The date button unrolls the last 30 days as a strip; click a day to inspect it.
 
 ## Security: all local, no server
 
@@ -303,9 +285,7 @@ The first run registers a login item (can be turned off). Uninstall with `./scri
 
 **Sign in (recommended)**: full billing view. Menu bar → Sign in on web, or press the button in the panel.
 
-**API key only**: balance only. Right-click → Account… → paste your `sk-` key:
-
-![settings](docs/settings.png)
+**API key only**: balance only. Right-click → Account… → paste your `sk-` key. Settings has three tabs: General (login item, refresh rate, language), Account (the two credentials), About (pricing and data notes).
 
 With neither configured, the first launch opens the panel by itself with one explanation and one button.
 

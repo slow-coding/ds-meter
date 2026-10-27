@@ -120,7 +120,7 @@ _ = text(
 )
 
 // 右边：面板（假数据那张）
-let panelHeight: CGFloat = 540
+let panelHeight: CGFloat = 560
 let panelWidth = panelHeight * (panel.size.width / panel.size.height)
 let panelRect = NSRect(
     x: width - panelWidth - 80,
@@ -138,15 +138,6 @@ shadow.set()
 panel.draw(in: panelRect, from: .zero, operation: .sourceOver, fraction: 1)
 NSGraphicsContext.restoreGraphicsState()
 
-// 面板右下角加一道很淡的高光边，别让它看起来是贴上去的
-let border = NSBezierPath(
-    roundedRect: panelRect.insetBy(dx: 0.5, dy: 0.5),
-    xRadius: 14,
-    yRadius: 14
-)
-NSColor(white: 1, alpha: 0.10).setStroke()
-border.lineWidth = 1
-border.stroke()
 
 NSGraphicsContext.restoreGraphicsState()
 
