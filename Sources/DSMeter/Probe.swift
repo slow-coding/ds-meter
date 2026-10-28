@@ -141,6 +141,11 @@ enum Probe {
             "tone": PeakHours.now.label,
             "models": meter.snap.today.models.map { ["name": $0.name, "tokens": $0.tokens, "cny": $0.cost] },
             "hours": meter.snap.today.hours.map { ($0 * 100).rounded() / 100 },
+            // 命中 / 未命中按小时：核平台那份小时桶跟本机日志对不对得上，只能看这个
+            "hourHit": meter.snap.today.hourHit,
+            "hourMiss": meter.snap.today.hourMiss,
+            "yesterdayHourHit": meter.snap.days[1]?.hourHit ?? [],
+            "yesterdayHourMiss": meter.snap.days[1]?.hourMiss ?? [],
             "panelSize": "\(panel.size)",
             "panelYesterdaySize": "\(panelYesterday.size)",
             "priceVerified": PeakHours.verifiedOn,

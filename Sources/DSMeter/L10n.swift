@@ -30,7 +30,7 @@ enum T {
     case setupTitle, setupBody, loginExpiredBody, setupBalanceOnly, loginStaysLocal
     case vsYesterday, vsPreviousDay, previousDay
     case runway, runwayNoData, priceLine
-    case hourChart, tokenLayer, unitPrice, unitPriceHelp, requestHelp, requests, perRequest
+    case hourChart, tokenLayer, unitPrice, unitPriceHelp, requestHelp, perRequest, requests
 
     // 菜单
     case menuRefresh, menuSettings, menuLogin, menuUsage, menuPricing, menuQuit, menuAutoStart, statusTooltip
@@ -101,7 +101,7 @@ enum T {
         case .requests: return "请求"
         case .perRequest: return "每次"
         case .requestHelp: return "平台记的请求数：一次 API 调用算一次（工具每转一圈算一次，子代理跑的也算），账单接口只给这个总数，拆不出哪几次是我自己问的。后面的「每次」= 那天的钱 ÷ 那天的请求数、那天的 token ÷ 那天的请求数。"
-        case .unitPriceHelp: return "那天的花费 ÷ 那天的 token 量（命中 + 未命中 + 输出）× 1 亿。高峰时段长、缓存没命中，这个数就高。"
+        case .unitPriceHelp: return "那天的花费 ÷ 那天的 token 量（命中 + 未命中 + 输出）× 1 亿。高峰时段长、缓存没命中，这个数就高。右边的请求数就是 1 亿 ÷ 每次的 token 量：每亿 token 摊到多少次调用。"
         case .menuRefresh: return "刷新"
         case .menuSettings: return "设置…"
         case .menuLogin: return "登录网页…"
@@ -212,7 +212,7 @@ enum T {
         case .requests: return "Requests"
         case .perRequest: return "Each"
         case .requestHelp: return "Requests as the platform counts them: one per API call — every tool round and every subagent run; the billing API only gives this total. “Each” is that day's spend ÷ requests, and that day's tokens ÷ requests."
-        case .unitPriceHelp: return "The day's spend ÷ its tokens (cache hit + miss + output) × 100M. More peak hours or more cache misses push it up."
+        case .unitPriceHelp: return "The day's spend ÷ its tokens (cache hit + miss + output) × 100M. More peak hours or more cache misses push it up. The requests on the right are 100M ÷ tokens per request: how many calls one 100M tokens takes."
         case .menuRefresh: return "Refresh"
         case .menuSettings: return "Settings…"
         case .menuLogin: return "Sign in on the web…"
@@ -311,10 +311,10 @@ enum L {
         return "\(head) \(T.tokenCount.s)"
     }
 
-    /// "8,499 次" / "8,499"：请求数那一行的值（单位在左边那个标签上：请求）。
-    static func requestCount(_ count: Int) -> String {
+    /// 「每亿 token 摊到多少次请求」："请求 595 次" / "595 requests"。
+    static func requestsPer100M(_ count: Int) -> String {
         let number = Fmt.count(count)
-        return Lang.current == .zh ? "\(number) 次" : number
+        return Lang.current == .zh ? "\(T.requests.s) \(number) 次" : "\(number) requests"
     }
 
     /// 一次请求过了多少 token："16.9 万 token" / "169K tokens"。单位跟 token 那一层同一套（万/亿、K/M）。
@@ -323,16 +323,6 @@ enum L {
         let number = trimDecimal(Double(tokens) / divisor)
         let head = suffix.isEmpty ? number : (Lang.current == .zh ? "\(number) \(suffix)" : "\(number)\(suffix)")
         return "\(head) \(T.tokenCount.s)"
-    }
-
-    /// 请求数后面那个对照：「（昨天 4,567 次）」/ "(yesterday 4,567)"。
-    static func requestsReference(_ count: String, relation: String) -> String {
-        switch Lang.current {
-        case .zh:
-            return "（\(relation) \(count) 次）"
-        case .en:
-            return "(\(relation.prefix(1).lowercased())\(relation.dropFirst()) \(count))"
-        }
     }
 
     /// 柱子/总量上那个数：三位以上不留小数（"1609" 而不是 "1609.0"）。

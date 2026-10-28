@@ -153,8 +153,7 @@ struct MeterPanel: View {
 
                 unitPriceRow.padding(.top, 10).dismissesPicker(closePicker)
 
-                requestsRow.padding(.top, 5).dismissesPicker(closePicker)
-
+                perRequestRow.padding(.top, 5).dismissesPicker(closePicker)
                 if modelSlots > 0 {
                     VStack(alignment: .leading, spacing: 7) {
                         ForEach(0..<modelSlots, id: \.self) { index in
@@ -557,6 +556,8 @@ struct MeterPanel: View {
 
     /// 那天花了多少 ÷ 那天的 token 量。切日跟着变；后面括号里是前一天同一个数，
     /// 拿它当尺子——两个数一比就知道那天是高峰多、还是缓存没命中。
+    /// 右边是同一把尺子上的另一格：每亿 token 摊到多少次请求（= 1 亿 ÷ 每次的 token 量）。
+    /// 单价是「贵不贵」，次数是「碎不碎」——同一天里两个数一起看才知道钱是被单次变大推高的，还是被次数推高的。
     private var unitPriceRow: some View {
         let price = dayLoaded ? day.unitPricePer100M : nil
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -582,56 +583,41 @@ struct MeterPanel: View {
                 .monospacedDigit()
                 .foregroundStyle(.tertiary)
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
+            if let per = perRequest, per.tokens > 0 {
+                Text(L.requestsPer100M(Int((100_000_000.0 / Double(per.tokens)).rounded())))
+                    .font(Style.body)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
         }
         .help(T.unitPriceHelp.s)
     }
 
-    // MARK: - 请求数
+    // MARK: - 一次请求多少钱
 
-    /// 那天平台记了多少次调用，以及「一次多少钱、一次多大」。
-    /// 请求数含工具每一转和子代理跑的，所以它比「我打过多少句话」大一个量级。
-    ///
-    /// 右边的两个数不另起一行：它们跟左边的计数是同一个东西的三个面（次数 / 每次的钱 / 每次的量），
-    /// 这三个数乘除一下就互为换算，摆两行反而让人以为是两组不相干的数。
-    private var requestsRow: some View {
-        let count = dayLoaded && day.requests > 0 ? day.requests : nil
+    /// 那天的钱 ÷ 请求数，那天的 token ÷ 请求数。
+    /// 只摆这两个：请求数本身（含工具每一转和子代理）除以金额就行，摆出来反而占一行的位置。
+    private var perRequestRow: some View {
         let per = perRequest
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(T.requests.s)
+            Text(T.perRequest.s)
                 .font(Style.body)
                 .foregroundStyle(.secondary)
-            if let count {
-                Text(L.requestCount(count))
-                    .font(Style.value)
-                    .monospacedDigit()
-                if let previous = shadow?.requests, previous > 0 {
-                    Text(L.requestsReference(
-                        Fmt.count(previous),
-                        relation: meter.selected == 0 ? T.yesterday.s : T.previousDay.s
-                    ))
-                    .font(.system(size: 10))
-                    .monospacedDigit()
-                    .foregroundStyle(.tertiary)
-                }
-            } else {
-                Text("—")
-                    .font(Style.value)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
             if let per {
-                Text(T.perRequest.s)
-                    .font(Style.body)
-                    .foregroundStyle(.secondary)
                 Text(Fmt.moneyFine(per.cost))
                     .font(Style.value)
                     .monospacedDigit()
                 Text("· \(L.tokenSize(per.tokens))")
                     .font(Style.body)
                     .foregroundStyle(.secondary)
+            } else {
+                Text("—")
+                    .font(Style.value)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
+            Spacer(minLength: 0)
         }
         .help(T.requestHelp.s)
     }
