@@ -35,5 +35,18 @@ enum Fmt {
         return nil
     }
 
+    /// 请求数这种整数：带千分位（9403 → "9,403"）。四五位数一眼要认出量级。
+    static func count(_ value: Int) -> String {
+        countFormatter.string(from: NSNumber(value: value)) ?? String(value)
+    }
+
+    private static let countFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.maximumFractionDigits = 0
+        f.usesGroupingSeparator = true
+        return f
+    }()
+
     static func clock(_ date: Date) -> String { clockFormatter.string(from: date) }
 }

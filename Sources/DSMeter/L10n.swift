@@ -30,7 +30,7 @@ enum T {
     case setupTitle, setupBody, loginExpiredBody, setupBalanceOnly, loginStaysLocal
     case vsYesterday, vsPreviousDay, previousDay
     case runway, runwayNoData, priceLine
-    case hourChart, tokenLayer, unitPrice, unitPriceHelp
+    case hourChart, tokenLayer, unitPrice, unitPriceHelp, requestHelp, requests
 
     // 菜单
     case menuRefresh, menuSettings, menuLogin, menuUsage, menuPricing, menuQuit, menuAutoStart, statusTooltip
@@ -98,6 +98,8 @@ enum T {
         case .hourChart: return "上面一层是每小时花了多少（绿闲时、橙高峰，淡的是还没到的时段），下面一层是同一小时的 token 量；灰的是前一天同一小时"
         case .tokenLayer: return "token"
         case .unitPrice: return "每亿 token"
+        case .requests: return "请求"
+        case .requestHelp: return "平台记的请求数：一次 API 调用算一次（工具每转一圈算一次，子代理跑的也算）。账单接口只给这个总数，拆不出哪几次是我自己问的。"
         case .unitPriceHelp: return "那天的花费 ÷ 那天的 token 量（命中 + 未命中 + 输出）× 1 亿。高峰时段长、缓存没命中，这个数就高。"
         case .menuRefresh: return "刷新"
         case .menuSettings: return "设置…"
@@ -206,6 +208,8 @@ enum T {
         case .hourChart: return "Top: spend per hour (green off-peak, orange peak, faded = not yet). Below: tokens for the same hour. Grey is the same hour yesterday."
         case .tokenLayer: return "tokens"
         case .unitPrice: return "Per 100M tokens"
+        case .requests: return "Requests"
+        case .requestHelp: return "Requests as the platform counts them: one per API call — every tool round and every subagent run. The billing API only gives this total; it cannot split out the calls I made myself."
         case .unitPriceHelp: return "The day's spend ÷ its tokens (cache hit + miss + output) × 100M. More peak hours or more cache misses push it up."
         case .menuRefresh: return "Refresh"
         case .menuSettings: return "Settings…"
@@ -303,6 +307,22 @@ enum L {
     static func tokenTotal(_ number: String, suffix: String) -> String {
         let head = suffix.isEmpty ? number : (Lang.current == .zh ? "\(number) \(suffix)" : "\(number)\(suffix)")
         return "\(head) \(T.tokenCount.s)"
+    }
+
+    /// "8,499 次" / "8,499"：请求数那一行的值（单位在左边那个标签上：请求）。
+    static func requestCount(_ count: Int) -> String {
+        let number = Fmt.count(count)
+        return Lang.current == .zh ? "\(number) 次" : number
+    }
+
+    /// 请求数后面那个对照：「（昨天 4,567 次）」/ "(yesterday 4,567)"。
+    static func requestsReference(_ count: String, relation: String) -> String {
+        switch Lang.current {
+        case .zh:
+            return "（\(relation) \(count) 次）"
+        case .en:
+            return "(\(relation.prefix(1).lowercased())\(relation.dropFirst()) \(count))"
+        }
     }
 
     /// 柱子/总量上那个数：三位以上不留小数（"1609" 而不是 "1609.0"）。

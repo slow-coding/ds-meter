@@ -331,15 +331,16 @@ final class Meter: ObservableObject {
             bill.modelCost = ["deepseek-flash": flash, "deepseek-v4-pro": pro]
             let tokens = total * 13_000_000 * density
             // hitDrop：那天命中的份额比基准差多少（假数据里每天不一样，命中率那行才有「比昨天」可看）
+            // 请求数按真实比例给：一次请求平均十几万 token（上下文长），所以一元钱不到一百次
             bill.tokens = [
                 "deepseek-flash": .init(
-                    requests: Int(total * 330),
+                    requests: Int(total * 74 * density),
                     miss: Int(tokens * 0.96 * (0.03 + hitDrop)),
                     hit: Int(tokens * 0.96 * (0.97 - hitDrop)),
                     response: Int(tokens * 0.96 * 0.12)
                 ),
                 "deepseek-v4-pro": .init(
-                    requests: Int(total * 9),
+                    requests: Int(total * 3 * density),
                     miss: Int(tokens * 0.04 * (0.08 + hitDrop)),
                     hit: Int(tokens * 0.04 * (0.92 - hitDrop)),
                     response: Int(tokens * 0.04 * 0.15)

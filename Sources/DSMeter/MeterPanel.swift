@@ -153,6 +153,8 @@ struct MeterPanel: View {
 
                 unitPriceRow.padding(.top, 10).dismissesPicker(closePicker)
 
+                requestsRow.padding(.top, 5).dismissesPicker(closePicker)
+
                 if modelSlots > 0 {
                     VStack(alignment: .leading, spacing: 7) {
                         ForEach(0..<modelSlots, id: \.self) { index in
@@ -585,8 +587,41 @@ struct MeterPanel: View {
         .help(T.unitPriceHelp.s)
     }
 
-    // MARK: - 页脚
+    // MARK: - 请求数
 
+    /// 那天平台记了多少次调用。一次 API 调用算一次（工具每转一圈、子代理跑的都在里面），
+    /// 所以它比「我打过多少句话」大一个量级，不能当提问数看。
+    private var requestsRow: some View {
+        let count = dayLoaded && day.requests > 0 ? day.requests : nil
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(T.requests.s)
+                .font(Style.body)
+                .foregroundStyle(.secondary)
+            if let count {
+                Text(L.requestCount(count))
+                    .font(Style.value)
+                    .monospacedDigit()
+                if let previous = shadow?.requests, previous > 0 {
+                    Text(L.requestsReference(
+                        Fmt.count(previous),
+                        relation: meter.selected == 0 ? T.yesterday.s : T.previousDay.s
+                    ))
+                    .font(.system(size: 10))
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                }
+            } else {
+                Text("—")
+                    .font(Style.value)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .help(T.requestHelp.s)
+    }
+
+    // MARK: - 页脚
     private var footer: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(runwayText).font(Style.body).foregroundStyle(.secondary)

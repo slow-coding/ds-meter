@@ -120,6 +120,11 @@ enum Probe {
             "yesterdayMissRate": yesterdayMissRate(meter.snap),
             "avgDays": meter.snap.avgDays,
             "requests": meter.snap.today.requests,
+            "yesterdayRequests": meter.snap.days[1]?.requests ?? -1,
+            // 一次请求平均多少 token：token 总量 ÷ 请求数。面板上两个数摆在一起，看的人自己也能除。
+            "perRequestTokens": meter.snap.today.requests > 0
+                ? Double(meter.snap.today.tokenTotal) / Double(meter.snap.today.requests)
+                : -1,
             "miss": meter.snap.today.miss,
             "hit": meter.snap.today.hit,
             "output": meter.snap.today.output,
