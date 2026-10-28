@@ -589,10 +589,14 @@ struct MeterPanel: View {
 
     // MARK: - 请求数
 
-    /// 那天平台记了多少次调用。一次 API 调用算一次（工具每转一圈、子代理跑的都在里面），
-    /// 所以它比「我打过多少句话」大一个量级，不能当提问数看。
+    /// 那天平台记了多少次调用，以及「一次多少钱、一次多大」。
+    /// 请求数含工具每一转和子代理跑的，所以它比「我打过多少句话」大一个量级。
+    ///
+    /// 右边的两个数不另起一行：它们跟左边的计数是同一个东西的三个面（次数 / 每次的钱 / 每次的量），
+    /// 这三个数乘除一下就互为换算，摆两行反而让人以为是两组不相干的数。
     private var requestsRow: some View {
         let count = dayLoaded && day.requests > 0 ? day.requests : nil
+        let per = perRequest
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(T.requests.s)
                 .font(Style.body)
@@ -616,9 +620,27 @@ struct MeterPanel: View {
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
+            if let per {
+                Text(T.perRequest.s)
+                    .font(Style.body)
+                    .foregroundStyle(.secondary)
+                Text(Fmt.moneyFine(per.cost))
+                    .font(Style.value)
+                    .monospacedDigit()
+                Text("· \(L.tokenSize(per.tokens))")
+                    .font(Style.body)
+                    .foregroundStyle(.secondary)
+            }
         }
         .help(T.requestHelp.s)
+    }
+
+    /// 那天的钱 ÷ 请求数、token ÷ 请求数。两个接口只回来一份时（没请求、没钱）不给数。
+    private var perRequest: (cost: Double, tokens: Int)? {
+        guard dayLoaded, day.requests > 0 else { return nil }
+        guard day.money > 0 || day.tokenTotal > 0 else { return nil }
+        return (day.money / Double(day.requests), day.tokenTotal / day.requests)
     }
 
     // MARK: - 页脚

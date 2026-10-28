@@ -30,7 +30,7 @@ enum T {
     case setupTitle, setupBody, loginExpiredBody, setupBalanceOnly, loginStaysLocal
     case vsYesterday, vsPreviousDay, previousDay
     case runway, runwayNoData, priceLine
-    case hourChart, tokenLayer, unitPrice, unitPriceHelp, requestHelp, requests
+    case hourChart, tokenLayer, unitPrice, unitPriceHelp, requestHelp, requests, perRequest
 
     // 菜单
     case menuRefresh, menuSettings, menuLogin, menuUsage, menuPricing, menuQuit, menuAutoStart, statusTooltip
@@ -99,7 +99,8 @@ enum T {
         case .tokenLayer: return "token"
         case .unitPrice: return "每亿 token"
         case .requests: return "请求"
-        case .requestHelp: return "平台记的请求数：一次 API 调用算一次（工具每转一圈算一次，子代理跑的也算）。账单接口只给这个总数，拆不出哪几次是我自己问的。"
+        case .perRequest: return "每次"
+        case .requestHelp: return "平台记的请求数：一次 API 调用算一次（工具每转一圈算一次，子代理跑的也算），账单接口只给这个总数，拆不出哪几次是我自己问的。后面的「每次」= 那天的钱 ÷ 那天的请求数、那天的 token ÷ 那天的请求数。"
         case .unitPriceHelp: return "那天的花费 ÷ 那天的 token 量（命中 + 未命中 + 输出）× 1 亿。高峰时段长、缓存没命中，这个数就高。"
         case .menuRefresh: return "刷新"
         case .menuSettings: return "设置…"
@@ -209,7 +210,8 @@ enum T {
         case .tokenLayer: return "tokens"
         case .unitPrice: return "Per 100M tokens"
         case .requests: return "Requests"
-        case .requestHelp: return "Requests as the platform counts them: one per API call — every tool round and every subagent run. The billing API only gives this total; it cannot split out the calls I made myself."
+        case .perRequest: return "Each"
+        case .requestHelp: return "Requests as the platform counts them: one per API call — every tool round and every subagent run; the billing API only gives this total. “Each” is that day's spend ÷ requests, and that day's tokens ÷ requests."
         case .unitPriceHelp: return "The day's spend ÷ its tokens (cache hit + miss + output) × 100M. More peak hours or more cache misses push it up."
         case .menuRefresh: return "Refresh"
         case .menuSettings: return "Settings…"
@@ -313,6 +315,14 @@ enum L {
     static func requestCount(_ count: Int) -> String {
         let number = Fmt.count(count)
         return Lang.current == .zh ? "\(number) 次" : number
+    }
+
+    /// 一次请求过了多少 token："16.9 万 token" / "169K tokens"。单位跟 token 那一层同一套（万/亿、K/M）。
+    static func tokenSize(_ tokens: Int) -> String {
+        let (divisor, suffix) = tokenUnit(Double(tokens))
+        let number = trimDecimal(Double(tokens) / divisor)
+        let head = suffix.isEmpty ? number : (Lang.current == .zh ? "\(number) \(suffix)" : "\(number)\(suffix)")
+        return "\(head) \(T.tokenCount.s)"
     }
 
     /// 请求数后面那个对照：「（昨天 4,567 次）」/ "(yesterday 4,567)"。
