@@ -365,11 +365,11 @@ enum L {
         }
     }
 
-    /// 命中那一列的悬停说明：命中率怎么算、括号里那串是什么单位。
+    /// 命中那一列的悬停说明：命中率怎么算、括号里那串是什么单位、比的是哪一段。
     static func hitHelp() -> String {
         Lang.current == .zh
-            ? "命中率 = 命中 ÷（命中 + 未命中）。括号里是跟前一天比的百分点差。"
-            : "Cache hit rate = hit ÷ (hit + miss). The bracket is the change vs the previous day, in percentage points."
+            ? "命中率 = 命中 ÷（命中 + 未命中）。括号里是跟前一天比的百分点差。今天还没过完，两边都只算已经走完的整点，所以比的是同样长的一段。"
+            : "Cache hit rate = hit ÷ (hit + miss). The bracket is the change vs the previous day, in percentage points. Today is not over yet, so both sides only count completed hours — the same stretch on each day."
     }
 
     /// 命中率后面那串括号：(比昨天 +2.2%) / (vs yesterday +2.2%)

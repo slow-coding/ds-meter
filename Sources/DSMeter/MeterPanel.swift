@@ -500,7 +500,7 @@ struct MeterPanel: View {
                             // 括号比主体小一号：这是注解，不是第二个数。
                             Text(L.hitDelta(delta.text, relation: meter.selected == 0 ? T.vsYesterday.s : T.vsPreviousDay.s))
                                 .font(.system(size: 10))
-                                .foregroundStyle(Style.delta(better: delta.better, dark: colorScheme == .dark))
+                                .foregroundStyle(deltaColor(delta.better))
                         }
                     }
                     .font(Style.body)
@@ -656,11 +656,19 @@ struct MeterPanel: View {
 
     /// 那天的命中率 - 前一天的命中率，单位是百分点。最早的那天没有前一天，不摆。
     /// 两个数怎么截到同一段时长，见 `Snapshot.comparisonHitRates`。
-    private var hitDelta: (text: String, better: Bool)? {
+    /// 四舍五入到 0.0 就写「0.0%」、不带正负号：不显示会让人以为这行掉了，
+    /// 也不能让 -0.04 显示成「-0.0%」。
+    private var hitDelta: (text: String, better: Bool?)? {
         guard let pair = meter.snap.comparisonHitRates(selected: meter.selected) else { return nil }
-        let delta = pair.current - pair.previous
-        guard abs(delta) >= 0.001 else { return nil }
-        return (String(format: "%+.1f%%", delta * 100), delta > 0)
+        let points = (pair.current - pair.previous) * 100
+        guard abs(points) >= 0.05 else { return ("0.0%", nil) }
+        return (String(format: "%+.1f%%", points), points > 0)
+    }
+
+    /// 差值的颜色：涨蓝、跌黄（深浅按明暗走）；抹平到 0.0 用灰的——它不是涨也不是跌。
+    private func deltaColor(_ better: Bool?) -> Color {
+        guard let better else { return .secondary }
+        return Style.delta(better: better, dark: colorScheme == .dark)
     }
 
     /// 缓存里任何一天有命中数据，这一行就占着位置（切日时不会抽上去一格）。
