@@ -99,60 +99,55 @@ enum Probe {
         let panelPickerLight = render(meter: meter, appearance: NSAppearance(named: .aqua), pickerOpen: true)
         select(0)
 
-        var report: [String: Any] = [
-            "hasData": meter.snap.hasData,
-            "usageError": meter.snap.error ?? "",
-            "balance": meter.balance.amount ?? -1,
-            "moneyToday": meter.snap.moneyToday,
-            "peakCost": meter.snap.peakCost,
-            "offPeakCost": meter.snap.offPeakCost,
-            "peakPremium": meter.snap.peakPremium,
-            "dayOffsets": meter.snap.days.keys.sorted(),
-            "daily": meter.snap.daily.map { ($0 * 100).rounded() / 100 },
-            "yesterdayMoney": meter.snap.days[1]?.money ?? -1,
-            "yesterdayPeak": meter.snap.days[1]?.peak ?? -1,
-            "yesterdayOffPeak": meter.snap.days[1]?.offPeak ?? -1,
-            "yesterdayPremium": meter.snap.days[1]?.premium ?? -1,
-            "yesterdayWeekday": meter.snap.days[1]?.weekday ?? -1,
-            "yesterdayHitRate": meter.snap.days[1]?.hitRate ?? -1,
-            "moneyComplete": meter.snap.moneyComplete,
-            // 日均是拟合值（Trend），runwayDays 是面板上那个「还能撑 N 天」
-            "burnRate": meter.snap.burnRate ?? -1,
-            "yesterdayMissRate": yesterdayMissRate(meter.snap),
-            "runwayDays": meter.runwayDays ?? -1,
-            "requests": meter.snap.today.requests,
-            "yesterdayRequests": meter.snap.days[1]?.requests ?? -1,
-            // 一次请求平均多少 token：token 总量 ÷ 请求数。面板上两个数摆在一起，看的人自己也能除。
-            "perRequestTokens": meter.snap.today.requests > 0
+        var report = ProbeReport(
+            hasData: meter.snap.hasData,
+            usageError: meter.snap.error ?? "",
+            balance: meter.balance.amount ?? -1,
+            moneyToday: meter.snap.moneyToday,
+            peakCost: meter.snap.peakCost,
+            offPeakCost: meter.snap.offPeakCost,
+            peakPremium: meter.snap.peakPremium,
+            dayOffsets: meter.snap.days.keys.sorted(),
+            daily: meter.snap.daily.map { ($0 * 100).rounded() / 100 },
+            yesterdayMoney: meter.snap.days[1]?.money ?? -1,
+            yesterdayPeak: meter.snap.days[1]?.peak ?? -1,
+            yesterdayOffPeak: meter.snap.days[1]?.offPeak ?? -1,
+            yesterdayPremium: meter.snap.days[1]?.premium ?? -1,
+            yesterdayWeekday: meter.snap.days[1]?.weekday ?? -1,
+            yesterdayHitRate: meter.snap.days[1]?.hitRate ?? -1,
+            moneyComplete: meter.snap.moneyComplete,
+            burnRate: meter.snap.burnRate ?? -1,
+            yesterdayMissRate: yesterdayMissRate(meter.snap),
+            runwayDays: meter.runwayDays ?? -1,
+            requests: meter.snap.today.requests,
+            yesterdayRequests: meter.snap.days[1]?.requests ?? -1,
+            perRequestTokens: meter.snap.today.requests > 0
                 ? Double(meter.snap.today.tokenTotal) / Double(meter.snap.today.requests)
                 : -1,
-            "miss": meter.snap.today.miss,
-            "hit": meter.snap.today.hit,
-            "output": meter.snap.today.output,
-            "hitRate": meter.snap.today.hitRate ?? -1,
-            // 「比昨天」实际用来做差的那两个数：今天只算到已过去的小时，两边一样长
-            "hitRateSameHours": meter.snap.comparisonHitRates(selected: 0)?.current ?? -1,
-            "yesterdayHitRateSameHours": meter.snap.comparisonHitRates(selected: 0)?.previous ?? -1,
-            "unitPriceSameHours": meter.snap.comparisonUnitPrices(selected: 0)?.current ?? -1,
-            "yesterdayUnitPriceSameHours": meter.snap.comparisonUnitPrices(selected: 0)?.previous ?? -1,
-            "unitPrice": meter.snap.today.unitPricePer100M ?? -1,
-            "yesterdayUnitPrice": meter.snap.days[1]?.unitPricePer100M ?? -1,
-            "ratePerHour": meter.snap.ratePerHour ?? -1,
-            "tone": PeakHours.now.label,
-            "models": meter.snap.today.models.map { ["name": $0.name, "tokens": $0.tokens, "cny": $0.cost] },
-            "hours": meter.snap.today.hours.map { ($0 * 100).rounded() / 100 },
-            // 命中 / 未命中按小时：核平台那份小时桶跟本机日志对不对得上，只能看这个
-            "hourHit": meter.snap.today.hourHit,
-            "hourMiss": meter.snap.today.hourMiss,
-            "yesterdayHourHit": meter.snap.days[1]?.hourHit ?? [],
-            "yesterdayHourMiss": meter.snap.days[1]?.hourMiss ?? [],
-            "panelSize": "\(panel.size)",
-            "panelYesterdaySize": "\(panelYesterday.size)",
-            "priceVerified": PeakHours.verifiedOn,
-            "priceStale": PeakHours.isPriceStale,
-            // demo 模式不碰凭据：截图和自检都不该读本机那两串
-            "apiKey": demo ? "demo" : Account.apiKeyOrigin,
-        ]
+            miss: meter.snap.today.miss,
+            hit: meter.snap.today.hit,
+            output: meter.snap.today.output,
+            hitRate: meter.snap.today.hitRate ?? -1,
+            hitRateSameHours: meter.snap.comparisonHitRates(selected: 0)?.current ?? -1,
+            yesterdayHitRateSameHours: meter.snap.comparisonHitRates(selected: 0)?.previous ?? -1,
+            unitPriceSameHours: meter.snap.comparisonUnitPrices(selected: 0)?.current ?? -1,
+            yesterdayUnitPriceSameHours: meter.snap.comparisonUnitPrices(selected: 0)?.previous ?? -1,
+            unitPrice: meter.snap.today.unitPricePer100M ?? -1,
+            yesterdayUnitPrice: meter.snap.days[1]?.unitPricePer100M ?? -1,
+            ratePerHour: meter.snap.ratePerHour ?? -1,
+            tone: PeakHours.now.label,
+            models: meter.snap.today.models.map { .init(name: $0.name, tokens: $0.tokens, cny: $0.cost) },
+            hours: meter.snap.today.hours.map { ($0 * 100).rounded() / 100 },
+            hourHit: meter.snap.today.hourHit,
+            hourMiss: meter.snap.today.hourMiss,
+            yesterdayHourHit: meter.snap.days[1]?.hourHit ?? [],
+            yesterdayHourMiss: meter.snap.days[1]?.hourMiss ?? [],
+            panelSize: "\(panel.size)",
+            panelYesterdaySize: "\(panelYesterday.size)",
+            priceVerified: PeakHours.verifiedOn,
+            priceStale: PeakHours.isPriceStale,
+            apiKey: demo ? "demo" : Account.apiKeyOrigin
+        )
 
         // 设置窗口那张图（README 用）：离屏渲染，字段是空的
         if arguments.contains("--settings-shot") {
@@ -178,7 +173,7 @@ enum Probe {
             if let png = statusShot(amount: Fmt.money(meter.snap.moneyToday), tone: PeakHours.now.tone) {
                 let file = dir.appendingPathComponent("status.png")
                 try? png.write(to: file)
-                report["statusPNG"] = file.path
+                report.statusPNG = file.path
             }
         }
 
@@ -193,17 +188,24 @@ enum Probe {
             try? panelYesterday.png.write(to: dir.appendingPathComponent("panel-yesterday.png"))
             try? panelPicker.png.write(to: dir.appendingPathComponent("panel-picker.png"))
             try? panelPickerLight.png.write(to: dir.appendingPathComponent("panel-picker-light.png"))
-            report["pickerSize"] = "\(panelPicker.size)"
+            report.pickerSize = "\(panelPicker.size)"
             try? settingsGeneral.png.write(to: dir.appendingPathComponent("settings-general.png"))
             try? settingsAccount.png.write(to: dir.appendingPathComponent("settings-account.png"))
             try? settingsAbout.png.write(to: dir.appendingPathComponent("settings-about.png"))
-            report["settingsSize"] = "\(settingsGeneral.size)"
-            report["panelPNG"] = file.path
+            report.settingsSize = "\(settingsGeneral.size)"
+            report.panelPNG = file.path
         }
 
-        if let data = try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        do {
+            let data = try encoder.encode(report)
             FileHandle.standardOutput.write(data)
             FileHandle.standardOutput.write("\n".data(using: .utf8)!)
+        } catch {
+            // 出不来就明说，别静悄悄给一份空 JSON——自检工具坏掉比它不存在更麻烦。
+            FileHandle.standardError.write("probe: 报告序列化失败 \(error)\n".data(using: .utf8)!)
+            exit(4)
         }
         exit(0)
     }

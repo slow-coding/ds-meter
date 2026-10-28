@@ -14,3 +14,26 @@ jobs:
           fetch-depth: 0
       - name: Security audit
         run: ./scripts/security-audit.sh
+
+  # 发出去的包里的 --probe 能不能跑：在和生产同一个构建（universal、同一版 Swift）上真跑一遍。
+  # 加这一步的由头：v1.0.3 / v1.0.4 的 dmg 里那个二进制跑 --probe 直接崩（[String: Any] 在旧 Swift 里
+  # 桥成 __SwiftValue，JSONSerialization 抛异常），本机怎么跑都是好的，所以一直没人发现。
+  probe:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 编译（universal，跟发出去的那个包同一个构建）
+        run: swift build -c release --arch arm64 --arch x86_64 --scratch-path .ci-build
+
+      - name: 自检三种状态都得跑通，并且真出一份 JSON
+        run: |
+          BIN=$(swift build -c release --arch arm64 --arch x86_64 --scratch-path .ci-build --show-bin-path)
+          set -e
+          for args in "--demo" "--fresh" "--demo --logged-out"; do
+            echo "== --probe $args"
+            rm -rf /tmp/probe; mkdir -p /tmp/probe
+            "$BIN/DSMeter" --probe $args --snapshot /tmp/probe --status /tmp/probe > /tmp/probe/report.json
+            python3 -c "import json,sys; d=json.load(open('/tmp/probe/report.json')); assert 'runwayDays' in d and 'panelSize' in d; print('   ok  ' + d['panelSize'])"
+            test -f /tmp/probe/panel.png
+          done
