@@ -116,9 +116,10 @@ enum Probe {
             "yesterdayWeekday": meter.snap.days[1]?.weekday ?? -1,
             "yesterdayHitRate": meter.snap.days[1]?.hitRate ?? -1,
             "moneyComplete": meter.snap.moneyComplete,
-            "avgDaily": meter.snap.avgDaily ?? -1,
+            // 日均是拟合值（Trend），runwayDays 是面板上那个「还能撑 N 天」
+            "burnRate": meter.snap.burnRate ?? -1,
             "yesterdayMissRate": yesterdayMissRate(meter.snap),
-            "avgDays": meter.snap.avgDays,
+            "runwayDays": meter.runwayDays ?? -1,
             "requests": meter.snap.today.requests,
             "yesterdayRequests": meter.snap.days[1]?.requests ?? -1,
             // 一次请求平均多少 token：token 总量 ÷ 请求数。面板上两个数摆在一起，看的人自己也能除。
@@ -129,6 +130,11 @@ enum Probe {
             "hit": meter.snap.today.hit,
             "output": meter.snap.today.output,
             "hitRate": meter.snap.today.hitRate ?? -1,
+            // 「比昨天」实际用来做差的那两个数：今天只算到已过去的小时，两边一样长
+            "hitRateSameHours": meter.snap.comparisonHitRates(selected: 0)?.current ?? -1,
+            "yesterdayHitRateSameHours": meter.snap.comparisonHitRates(selected: 0)?.previous ?? -1,
+            "unitPriceSameHours": meter.snap.comparisonUnitPrices(selected: 0)?.current ?? -1,
+            "yesterdayUnitPriceSameHours": meter.snap.comparisonUnitPrices(selected: 0)?.previous ?? -1,
             "unitPrice": meter.snap.today.unitPricePer100M ?? -1,
             "yesterdayUnitPrice": meter.snap.days[1]?.unitPricePer100M ?? -1,
             "ratePerHour": meter.snap.ratePerHour ?? -1,

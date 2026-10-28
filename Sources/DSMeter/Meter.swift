@@ -103,6 +103,11 @@ final class Meter: ObservableObject {
 
     // MARK: - 余额（官方公开接口，实时）
 
+    /// 余额按现在这个日均还能撑几天。日均是拟合出来的（Trend），不是 30 天除一下。
+    var runwayDays: Int? {
+        Trend.runwayDays(balance: balance.amount ?? 0, burnRate: snap.burnRate)
+    }
+
     func refreshBalance() {
         BalanceClient.fetch { [weak self] state in
             guard let self else { return }
@@ -172,7 +177,6 @@ final class Meter: ObservableObject {
         cacheStart = today
         snap.days = [:]
         snap.daily = []
-        snap.avgDaily = nil
         snap.totalRecent = nil
         dayFetchedAt = [:]
         recentFetchedAt = nil
@@ -196,7 +200,7 @@ final class Meter: ObservableObject {
         ensureDay(selected + 2)
     }
 
-    /// 近 30 天每天多少（heatmap）+ 完整的天平均每天。十分钟取一次就够。
+    /// 近 30 天每天多少（heatmap）；当日均用 Trend 从这串数里拟出来。十分钟取一次就够。
     private func refreshRecentIfNeeded() {
         if let fetched = recentFetchedAt, Date().timeIntervalSince(fetched) < 600, !snap.daily.isEmpty { return }
         recentFetchedAt = Date()
@@ -204,8 +208,6 @@ final class Meter: ObservableObject {
             guard let self, case .success(let recent) = result else { return }
             self.snap.daily = recent.daily
             self.snap.totalRecent = recent.total
-            self.snap.avgDaily = recent.average
-            self.snap.avgDays = PlatformClient.averageWindowDays
             self.onChange?()
         }
     }
@@ -265,8 +267,6 @@ final class Meter: ObservableObject {
                 if case .success(let recent) = result {
                     self.snap.daily = recent.daily
                     self.snap.totalRecent = recent.total
-                    self.snap.avgDaily = recent.average
-                    self.snap.avgDays = PlatformClient.averageWindowDays
                 }
                 done()
             }
@@ -324,6 +324,10 @@ final class Meter: ObservableObject {
                 let cost = (shape[hour] * scale * jitter(0.12) * 100).rounded() / 100
                 bill.hours[hour] = cost
                 bill.hourTokens[hour] = (cost * 12_500_000 * density * jitter(0.2)).rounded()
+                // 命中 / 未命中按小时也给一份：「比昨天」要拿同一段时长算，只有整天的总数算不出来
+                let prompt = bill.hourTokens[hour] * 0.85
+                bill.hourMiss[hour] = Int(prompt * (0.03 + hitDrop))
+                bill.hourHit[hour] = Int(prompt) - bill.hourMiss[hour]
             }
             let total = bill.hours.reduce(0, +)
             let flash = (total * 0.96 * 100).rounded() / 100
@@ -379,8 +383,6 @@ final class Meter: ObservableObject {
         daily[PlatformClient.calendarDays] = next.days[0]?.money ?? 0
         next.daily = daily
         next.totalRecent = daily.dropFirst().reduce(0, +)
-        next.avgDaily = daily.dropLast().reduce(0, +) / Double(PlatformClient.calendarDays)
-        next.avgDays = PlatformClient.averageWindowDays
         next.ratePerHour = Self.recentRate(hours: next.days[0]?.hours ?? [])
         next.moneyComplete = true
         next.updatedAt = Date()
@@ -413,6 +415,9 @@ struct DayCost {
     var hours: [Double] = Array(repeating: 0, count: 24)
     /// 每小时的 token 量（命中 + 未命中 + 输出，跨模型）
     var hourTokens: [Double] = Array(repeating: 0, count: 24)
+    /// 每小时的命中 / 未命中 token（跨模型）：只为了能算出「前几个小时」的命中率。
+    var hourHit: [Int] = Array(repeating: 0, count: 24)
+    var hourMiss: [Int] = Array(repeating: 0, count: 24)
     /// 那天是周几：1 = 周日 … 7 = 周六。
     var weekday = 0
     var models: [Model] = []
@@ -427,6 +432,8 @@ struct DayCost {
     init(bill: PlatformClient.DayBill, weekday: Int) {
         self.hours = bill.hours
         self.hourTokens = bill.hourTokens
+        self.hourHit = bill.hourHit
+        self.hourMiss = bill.hourMiss
         self.weekday = weekday
         var list: [Model] = []
         for (name, totals) in bill.tokens {
@@ -473,6 +480,23 @@ struct DayCost {
         let total = hit + miss
         return total > 0 ? Double(hit) / Double(total) : nil
     }
+
+    /// 前 `hour` 个小时的命中率（不含第 hour 个整点之后的）：今天还没过完，跟昨天比只能拿同样长的一段。
+    func hitRate(upto hour: Int) -> Double? {
+        let end = max(0, min(24, hour))
+        let hitSum = hourHit.prefix(end).reduce(0, +)
+        let missSum = hourMiss.prefix(end).reduce(0, +)
+        let total = hitSum + missSum
+        return total > 0 ? Double(hitSum) / Double(total) : nil
+    }
+
+    /// 前 `hour` 个小时的每亿单价：高峰时段占多大一块是跟着时段走的，半天比整天会比出不存在的高或低。
+    func unitPricePer100M(upto hour: Int) -> Double? {
+        let end = max(0, min(24, hour))
+        let moneySum = hours.prefix(end).reduce(0, +)
+        let tokenSum = hourTokens.prefix(end).reduce(0, +)
+        return tokenSum > 0 ? moneySum / tokenSum * 100_000_000 : nil
+    }
 }
 
 struct Snapshot {
@@ -485,8 +509,10 @@ struct Snapshot {
     var ratePerHour: Double?
     /// 最近 30 天一共花了多少（跟日历上那 30 格对得上）。
     var totalRecent: Double?
-    var avgDaily: Double?
-    var avgDays = 0
+
+    /// 现在每天花多少：把 daily 拟成一条线取最后一天的值（Trend）。
+    /// 不缓存、不另存一分：daily 一变它就跟着变，不会出现「两个日均」各说各的。
+    var burnRate: Double? { Trend.burnRate(daily: daily) }
 
     var updatedAt: Date?
     var error: String?
@@ -501,4 +527,38 @@ struct Snapshot {
     var peakCost: Double { today.peak }
     var offPeakCost: Double { today.offPeak }
     var peakPremium: Double { today.premium }
+
+    /// 命中率跟「前一天」比的两个数。规则只有这一处：
+    /// 看今天 = 两边都截到已过去的小时（正在走的这一小时两边都不算，它还没满）；
+    /// 看历史某天 = 两天都是整日，直接比。
+    /// 不截的话是拿今天的半天去比昨天的整天：一直看到中午以前，命中率都会被读低一截
+    /// （2026-10-28 实测：面板 -0.2%，同口径其实是今天 +0.5%）。
+    func comparisonHitRates(selected: Int, now: Date = Date()) -> (current: Double, previous: Double)? {
+        guard let fullCurrent = days[selected]?.hitRate, let fullPrevious = days[selected + 1]?.hitRate else {
+            return nil
+        }
+        guard selected == 0 else { return (fullCurrent, fullPrevious) }
+        let elapsed = PeakHours.hour(of: now)
+        guard elapsed > 0,
+              let current = days[0]?.hitRate(upto: elapsed),
+              let previous = days[1]?.hitRate(upto: elapsed) else {
+            return nil
+        }
+        return (current, previous)
+    }
+
+    /// 每亿单价那两个数：跟命中率一套口径。显示的仍是当天到现在那个价，括号里的对照截到同一段时长。
+    func comparisonUnitPrices(selected: Int, now: Date = Date()) -> (current: Double, previous: Double)? {
+        guard let fullCurrent = days[selected]?.unitPricePer100M, let fullPrevious = days[selected + 1]?.unitPricePer100M else {
+            return nil
+        }
+        guard selected == 0 else { return (fullCurrent, fullPrevious) }
+        let elapsed = PeakHours.hour(of: now)
+        guard elapsed > 0,
+              let current = days[0]?.unitPricePer100M(upto: elapsed),
+              let previous = days[1]?.unitPricePer100M(upto: elapsed) else {
+            return nil
+        }
+        return (current, previous)
+    }
 }

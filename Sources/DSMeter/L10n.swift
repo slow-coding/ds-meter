@@ -93,7 +93,7 @@ enum T {
         case .vsPreviousDay: return "比前一天"
         case .previousDay: return "前一天"
         case .runway: return "余额还能撑"
-        case .runwayNoData: return "跑满一整天之后才有「平均每天」"
+        case .runwayNoData: return "要三整天的账单才估得出日均"
         case .priceLine: return "价格"
         case .hourChart: return "上面一层是每小时花了多少（绿闲时、橙高峰，淡的是还没到的时段），下面一层是同一小时的 token 量；灰的是前一天同一小时"
         case .tokenLayer: return "token"
@@ -203,7 +203,7 @@ enum T {
         case .vsPreviousDay: return "vs previous day"
         case .previousDay: return "previous day"
         case .runway: return "Balance lasts"
-        case .runwayNoData: return "Needs a full day of data for the daily average"
+        case .runwayNoData: return "Needs three full days of billing"
         case .priceLine: return "Prices"
         case .hourChart: return "Top: spend per hour (green off-peak, orange peak, faded = not yet). Below: tokens for the same hour. Grey is the same hour yesterday."
         case .tokenLayer: return "tokens"
@@ -343,6 +343,14 @@ enum L {
     /// "余额还能撑 10 天" / "Balance lasts 10 days"
     static func runway(_ days: Int) -> String {
         Lang.current == .zh ? "\(T.runway.s) \(days) 天" : "\(T.runway.s) \(days) days"
+    }
+
+    /// 「还能撑几天」的悬停说明。得说清楚它不是 30 天除一下：日均是台阶式变的，
+    /// 两种算法差两倍（实测 36 天 vs 13 天），不说清楚没人知道该不该信。
+    static func runwayHelp() -> String {
+        Lang.current == .zh
+            ? "余额 ÷ 现在的日均。日均不是 30 天平均，是把最近两周每天花了多少拟成一条线、取这条线现在的值——用得越来越狠的时候，30 天平均会明显偏长。"
+            : "Balance ÷ today's daily burn. The burn rate is a least-squares line through the last two weeks of daily spend, read at its current value — not a 30-day average, which overstates runway when usage is climbing."
     }
 
     /// 每亿单价后面那个对照：「（昨天 ¥5.82）」/ "(yesterday ¥5.82)"。

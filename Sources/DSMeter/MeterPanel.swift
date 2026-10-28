@@ -573,7 +573,7 @@ struct MeterPanel: View {
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            if let price, let previous = shadow?.unitPricePer100M {
+            if price != nil, let previous = meter.snap.comparisonUnitPrices(selected: meter.selected)?.previous {
                 Text(L.unitPriceReference(
                     Fmt.money(previous),
                     relation: meter.selected == 0 ? T.yesterday.s : T.previousDay.s
@@ -625,6 +625,7 @@ struct MeterPanel: View {
     private var footer: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(runwayText).font(Style.body).foregroundStyle(.secondary)
+                .help(L.runwayHelp())
             Spacer(minLength: 8)
             Button {
                 NSWorkspace.shared.open(PeakHours.sourceURL)
@@ -646,9 +647,10 @@ struct MeterPanel: View {
     }
 
     /// 那天的命中率 - 前一天的命中率，单位是百分点。最早的那天没有前一天，不摆。
+    /// 两个数怎么截到同一段时长，见 `Snapshot.comparisonHitRates`。
     private var hitDelta: (text: String, better: Bool)? {
-        guard let current = day.hitRate, let previous = shadow?.hitRate else { return nil }
-        let delta = current - previous
+        guard let pair = meter.snap.comparisonHitRates(selected: meter.selected) else { return nil }
+        let delta = pair.current - pair.previous
         guard abs(delta) >= 0.001 else { return nil }
         return (String(format: "%+.1f%%", delta * 100), delta > 0)
     }
@@ -689,12 +691,11 @@ struct MeterPanel: View {
         return "…"
     }
 
-    /// 「还能用多久」按上面那个平均每天来算。
+    /// 「还能用多久」：余额 ÷ 现在的日均。日均由 Trend 从最近两周拟出来（见 Trend.swift），
+    /// 不是 30 天除一下——日均会台阶式地变，除 30 天会把「刚开始跑 agent」之前那些轻日子也算进来。
     private var runwayText: String {
-        guard let average = meter.snap.avgDaily, average > 0, let balance = meter.balance.amount else {
-            return T.runwayNoData.s
-        }
-        return L.runway(Int(max(balance / average, 0.4).rounded()))
+        guard let days = meter.runwayDays else { return T.runwayNoData.s }
+        return L.runway(days)
     }
 
     private var priceLine: String {

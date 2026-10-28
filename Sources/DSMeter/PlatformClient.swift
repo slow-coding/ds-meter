@@ -39,6 +39,9 @@ enum PlatformClient {
                                 // 第二张柱状图用：按小时把三种 token 加起来（命中 + 未命中 + 输出），跨模型累加
                                 let hour = PeakHours.hour(of: Date(timeIntervalSince1970: TimeInterval(bucket.time)))
                                 bill.hourTokens[hour] += Double(bucket.usage.hit + bucket.usage.miss + bucket.usage.response)
+                                // 只给「跟昨天同一时段」那种比法用：按小时留下命中 / 未命中
+                                bill.hourHit[hour] += bucket.usage.hit
+                                bill.hourMiss[hour] += bucket.usage.miss
                             }
                             bill.tokens[series.model ?? T.modelOther.s] = totals
                         }
@@ -61,8 +64,6 @@ enum PlatformClient {
         var daily: [Double] = []
         /// 最近 30 天一共花了多少（跟日历上那些格子对得上，含今天）。
         var total: Double = 0
-        /// 完整的那几天平均每天（估「还能撑多久」用，不含今天）。
-        var average: Double = 0
     }
 
     static func fetchRecent(completion: @escaping (Result<Recent, PlatformError>) -> Void) {
@@ -80,11 +81,9 @@ enum PlatformClient {
                         daily[index] += Double(bucket.cost) ?? 0
                     }
                 }
-                // 今天没过完，算进平均会压低：平均只用前面那 days 个完整天。
-                let complete = daily[0..<days].reduce(0, +)
                 // 一共多少用日历上那 30 格（含今天），跟用户看到的格子一一对应。
                 let shown = daily.dropFirst().reduce(0, +)
-                return Recent(daily: daily, total: shown, average: complete / Double(days))
+                return Recent(daily: daily, total: shown)
             })
         }
     }
@@ -133,6 +132,9 @@ enum PlatformClient {
         var hours: [Double] = Array(repeating: 0, count: 24)
         /// 每小时的 token 量（命中 + 未命中 + 输出，跨模型）
         var hourTokens: [Double] = Array(repeating: 0, count: 24)
+        /// 每小时的命中 / 未命中 token（跨模型）：「比昨天」要拿同一段时长出来比，总数算不出来。
+        var hourHit: [Int] = Array(repeating: 0, count: 24)
+        var hourMiss: [Int] = Array(repeating: 0, count: 24)
         var modelCost: [String: Double] = [:]
         var tokens: [String: TokenTotals] = [:]
     }
