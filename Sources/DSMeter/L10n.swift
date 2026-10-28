@@ -98,10 +98,10 @@ enum T {
         case .hourChart: return "上面一层是每小时花了多少（绿闲时、橙高峰，淡的是还没到的时段），下面一层是同一小时的 token 量；灰的是前一天同一小时"
         case .tokenLayer: return "token"
         case .unitPrice: return "每亿 token"
-        case .requests: return "请求"
+        case .requests: return "完成任务"
         case .perRequest: return "每次"
         case .requestHelp: return "平台记的请求数：一次 API 调用算一次（工具每转一圈算一次，子代理跑的也算），账单接口只给这个总数，拆不出哪几次是我自己问的。后面的「每次」= 那天的钱 ÷ 那天的请求数、那天的 token ÷ 那天的请求数。"
-        case .unitPriceHelp: return "那天的花费 ÷ 那天的 token 量（命中 + 未命中 + 输出）× 1 亿。高峰时段长、缓存没命中，这个数就高。右边的请求数就是 1 亿 ÷ 每次的 token 量：每亿 token 摊到多少次调用。"
+        case .unitPriceHelp: return "左边：那天的花费 ÷ 那天的 token 量（命中 + 未命中 + 输出）× 1 亿；高峰时段长、缓存没命中，这个数就高。右边：每亿 token 摊到多少次「完成任务」（= 1 亿 ÷ 每次的 token 量），括号里是前一天截到同一时刻的数。一次 API 调用算完成一次（工具每转一圈、子代理跑的都在里面）。"
         case .menuRefresh: return "刷新"
         case .menuSettings: return "设置…"
         case .menuLogin: return "登录网页…"
@@ -209,10 +209,10 @@ enum T {
         case .hourChart: return "Top: spend per hour (green off-peak, orange peak, faded = not yet). Below: tokens for the same hour. Grey is the same hour yesterday."
         case .tokenLayer: return "tokens"
         case .unitPrice: return "Per 100M tokens"
-        case .requests: return "Requests"
+        case .requests: return "Tasks"
         case .perRequest: return "Each"
         case .requestHelp: return "Requests as the platform counts them: one per API call — every tool round and every subagent run; the billing API only gives this total. “Each” is that day's spend ÷ requests, and that day's tokens ÷ requests."
-        case .unitPriceHelp: return "The day's spend ÷ its tokens (cache hit + miss + output) × 100M. More peak hours or more cache misses push it up. The requests on the right are 100M ÷ tokens per request: how many calls one 100M tokens takes."
+        case .unitPriceHelp: return "Left: the day's spend ÷ its tokens (cache hit + miss + output) × 100M — more peak hours or cache misses push it up. Right: completed tasks per 100M tokens (100M ÷ tokens per call), with the previous day cut to the same hour in brackets. One API call counts as one task, tool rounds and subagent runs included."
         case .menuRefresh: return "Refresh"
         case .menuSettings: return "Settings…"
         case .menuLogin: return "Sign in on the web…"
@@ -311,10 +311,20 @@ enum L {
         return "\(head) \(T.tokenCount.s)"
     }
 
-    /// 「每亿 token 摊到多少次请求」："请求 595 次" / "595 requests"。
-    static func requestsPer100M(_ count: Int) -> String {
+    /// 「每亿 token 摊到多少次」："完成任务 595 个" / "595 tasks"。
+    static func tasksPer100M(_ count: Int) -> String {
         let number = Fmt.count(count)
-        return Lang.current == .zh ? "\(T.requests.s) \(number) 次" : "\(number) requests"
+        return Lang.current == .zh ? "\(T.requests.s) \(number) 个" : "\(number) tasks"
+    }
+
+    /// 后面那个对照：「（昨天 588 个）」/ "(yesterday 588)"。
+    static func tasksPer100MReference(_ count: String, relation: String) -> String {
+        switch Lang.current {
+        case .zh:
+            return "（\(relation) \(count) 个）"
+        case .en:
+            return "(\(relation.prefix(1).lowercased())\(relation.dropFirst()) \(count))"
+        }
     }
 
     /// 一次请求过了多少 token："16.9 万 token" / "169K tokens"。单位跟 token 那一层同一套（万/亿、K/M）。

@@ -153,7 +153,6 @@ struct MeterPanel: View {
 
                 unitPriceRow.padding(.top, 10).dismissesPicker(closePicker)
 
-                perRequestRow.padding(.top, 5).dismissesPicker(closePicker)
                 if modelSlots > 0 {
                     VStack(alignment: .leading, spacing: 7) {
                         ForEach(0..<modelSlots, id: \.self) { index in
@@ -556,8 +555,9 @@ struct MeterPanel: View {
 
     /// 那天花了多少 ÷ 那天的 token 量。切日跟着变；后面括号里是前一天同一个数，
     /// 拿它当尺子——两个数一比就知道那天是高峰多、还是缓存没命中。
-    /// 右边是同一把尺子上的另一格：每亿 token 摊到多少次请求（= 1 亿 ÷ 每次的 token 量）。
-    /// 单价是「贵不贵」，次数是「碎不碎」——同一天里两个数一起看才知道钱是被单次变大推高的，还是被次数推高的。
+    /// 右边紧跟着同一把尺子上的另一格：每亿 token 摊到多少次请求（= 1 亿 ÷ 每次的 token 量），
+    /// 也带前一天的对照。单价是「贵不贵」，次数是「碎不碎」——两个数一起看才知道钱是被单次变大推高的，
+    /// 还是被次数推高的。
     private var unitPriceRow: some View {
         let price = dayLoaded ? day.unitPricePer100M : nil
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -583,50 +583,24 @@ struct MeterPanel: View {
                 .monospacedDigit()
                 .foregroundStyle(.tertiary)
             }
-            Spacer(minLength: 8)
-            if let per = perRequest, per.tokens > 0 {
-                Text(L.requestsPer100M(Int((100_000_000.0 / Double(per.tokens)).rounded())))
+            if let count = day.requestsPer100M() {
+                Text(L.tasksPer100M(count))
                     .font(Style.body)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
-            }
-        }
-        .help(T.unitPriceHelp.s)
-    }
-
-    // MARK: - 一次请求多少钱
-
-    /// 那天的钱 ÷ 请求数，那天的 token ÷ 请求数。
-    /// 只摆这两个：请求数本身（含工具每一转和子代理）除以金额就行，摆出来反而占一行的位置。
-    private var perRequestRow: some View {
-        let per = perRequest
-        return HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(T.perRequest.s)
-                .font(Style.body)
-                .foregroundStyle(.secondary)
-            if let per {
-                Text(Fmt.moneyFine(per.cost))
-                    .font(Style.value)
+                if let previous = meter.snap.previousRequestDensity(selected: meter.selected) {
+                    Text(L.tasksPer100MReference(
+                        Fmt.count(previous),
+                        relation: meter.selected == 0 ? T.yesterday.s : T.previousDay.s
+                    ))
+                    .font(.system(size: 10))
                     .monospacedDigit()
-                Text("· \(L.tokenSize(per.tokens))")
-                    .font(Style.body)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("—")
-                    .font(Style.value)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tertiary)
+                }
             }
             Spacer(minLength: 0)
         }
-        .help(T.requestHelp.s)
-    }
-
-    /// 那天的钱 ÷ 请求数、token ÷ 请求数。两个接口只回来一份时（没请求、没钱）不给数。
-    private var perRequest: (cost: Double, tokens: Int)? {
-        guard dayLoaded, day.requests > 0 else { return nil }
-        guard day.money > 0 || day.tokenTotal > 0 else { return nil }
-        return (day.money / Double(day.requests), day.tokenTotal / day.requests)
+        .help(T.unitPriceHelp.s)
     }
 
     // MARK: - 页脚

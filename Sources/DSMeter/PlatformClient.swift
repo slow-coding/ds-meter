@@ -39,6 +39,8 @@ enum PlatformClient {
                                 // 第二张柱状图用：按小时把三种 token 加起来（命中 + 未命中 + 输出），跨模型累加
                                 let hour = PeakHours.hour(of: Date(timeIntervalSince1970: TimeInterval(bucket.time)))
                                 bill.hourTokens[hour] += Double(bucket.usage.hit + bucket.usage.miss + bucket.usage.response)
+                                // 按小时留一份请求数：跟昨天比时得比「到同一时刻」，半天比整天比出的是假的涨跌
+                                bill.hourRequests[hour] += bucket.usage.request
                                 // 只给「跟昨天同一时段」那种比法用：按小时留下命中 / 未命中
                                 bill.hourHit[hour] += bucket.usage.hit
                                 bill.hourMiss[hour] += bucket.usage.miss
@@ -132,6 +134,8 @@ enum PlatformClient {
         var hours: [Double] = Array(repeating: 0, count: 24)
         /// 每小时的 token 量（命中 + 未命中 + 输出，跨模型）
         var hourTokens: [Double] = Array(repeating: 0, count: 24)
+        /// 每小时的请求数（跨模型）
+        var hourRequests: [Int] = Array(repeating: 0, count: 24)
         /// 每小时的命中 / 未命中 token（跨模型）：「比昨天」要拿同一段时长出来比，总数算不出来。
         var hourHit: [Int] = Array(repeating: 0, count: 24)
         var hourMiss: [Int] = Array(repeating: 0, count: 24)

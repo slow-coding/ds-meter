@@ -350,6 +350,14 @@ final class Meter: ObservableObject {
                     response: Int(tokens * 0.04 * 0.15)
                 ),
             ]
+            // 每小时的请求数：按 token 的分布摊下去（真实数据里两者基本同形）
+            let requestTotal = bill.tokens.values.reduce(0) { $0 + $1.requests }
+            let tokenTotal = bill.hourTokens.reduce(0, +)
+            if tokenTotal > 0 {
+                for hour in 0..<24 {
+                    bill.hourRequests[hour] = Int((bill.hourTokens[hour] / tokenTotal * Double(requestTotal)).rounded())
+                }
+            }
             return bill
         }
 
@@ -415,6 +423,8 @@ struct DayCost {
     var hours: [Double] = Array(repeating: 0, count: 24)
     /// 每小时的 token 量（命中 + 未命中 + 输出，跨模型）
     var hourTokens: [Double] = Array(repeating: 0, count: 24)
+    /// 每小时的请求数（跨模型）
+    var hourRequests: [Int] = Array(repeating: 0, count: 24)
     /// 每小时的命中 / 未命中 token（跨模型）：只为了能算出「前几个小时」的命中率。
     var hourHit: [Int] = Array(repeating: 0, count: 24)
     var hourMiss: [Int] = Array(repeating: 0, count: 24)
@@ -432,6 +442,7 @@ struct DayCost {
     init(bill: PlatformClient.DayBill, weekday: Int) {
         self.hours = bill.hours
         self.hourTokens = bill.hourTokens
+        self.hourRequests = bill.hourRequests
         self.hourHit = bill.hourHit
         self.hourMiss = bill.hourMiss
         self.weekday = weekday
@@ -497,6 +508,16 @@ struct DayCost {
         let tokenSum = hourTokens.prefix(end).reduce(0, +)
         return tokenSum > 0 ? moneySum / tokenSum * 100_000_000 : nil
     }
+
+    /// 每亿 token 摊到多少次请求（= 1 亿 × 请求数 ÷ token 数）。同样能只算前 `hour` 个小时。
+    /// 用整数那两个和直接算，不先算「每次多少 token」再除回去——两次取整会让面板上两个数对不上。
+    func requestsPer100M(upto hour: Int = 24) -> Int? {
+        let end = max(0, min(24, hour))
+        let tokenSum = hourTokens.prefix(end).reduce(0, +)
+        let requestSum = hourRequests.prefix(end).reduce(0, +)
+        guard tokenSum > 0, requestSum > 0 else { return nil }
+        return Int((100_000_000 * Double(requestSum) / tokenSum).rounded())
+    }
 }
 
 struct Snapshot {
@@ -560,5 +581,14 @@ struct Snapshot {
             return nil
         }
         return (current, previous)
+    }
+
+    /// 括号里那个对照：前一天同一时长的「每亿 token 摊到多少次」。
+    /// 取法跟单价那个括号一模一样——看今天时把前一天截到同一时刻，否则拿人家的整天比半天，比出来的是假的涨跌。
+    func previousRequestDensity(selected: Int, now: Date = Date()) -> Int? {
+        guard selected == 0 else { return days[selected + 1]?.requestsPer100M() }
+        let elapsed = PeakHours.hour(of: now)
+        guard elapsed > 0 else { return days[1]?.requestsPer100M() }
+        return days[1]?.requestsPer100M(upto: elapsed)
     }
 }
