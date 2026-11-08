@@ -33,7 +33,7 @@ jobs:
           for args in "--demo" "--fresh" "--demo --logged-out"; do
             echo "== --probe $args"
             rm -rf /tmp/probe; mkdir -p /tmp/probe
-            "$BIN/DSMeter" --probe $args --snapshot /tmp/probe --status /tmp/probe > /tmp/probe/report.json
+            "$BIN/PIMeter" --probe $args --snapshot /tmp/probe --status /tmp/probe > /tmp/probe/report.json
             python3 -c "import json,sys; d=json.load(open('/tmp/probe/report.json')); assert 'runwayDays' in d and 'panelSize' in d; print('   ok  ' + d['panelSize'])"
             test -f /tmp/probe/panel.png
           done

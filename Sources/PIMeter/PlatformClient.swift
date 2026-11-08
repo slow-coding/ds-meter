@@ -47,6 +47,15 @@ enum PlatformClient {
                             }
                             bill.tokens[series.model ?? T.modelOther.s] = totals
                         }
+                        // 检索（tool-search / tool-fetch）按次计价，不走 token 那套，单独一份计数。
+                        for series in payload.functionSeries ?? [] {
+                            guard let name = series.model, !name.isEmpty else { continue }
+                            for bucket in series.buckets {
+                                bill.functionCalls[name, default: 0] += bucket.usage.calls
+                                let hour = PeakHours.hour(of: Date(timeIntervalSince1970: TimeInterval(bucket.time)))
+                                bill.hourToolCalls[hour] += bucket.usage.calls
+                            }
+                        }
                     }
                     completion(.success(bill))
                 }
@@ -141,6 +150,10 @@ enum PlatformClient {
         var hourMiss: [Int] = Array(repeating: 0, count: 24)
         var modelCost: [String: Double] = [:]
         var tokens: [String: TokenTotals] = [:]
+        /// 按功能计的调用次数：["tool-search": 56, "tool-fetch": 9]。
+        var functionCalls: [String: Int] = [:]
+        /// 每小时的检索次数：这笔钱要按小时摊进柱子（否则高峰/闲时和那张图都对不上）。
+        var hourToolCalls: [Int] = Array(repeating: 0, count: 24)
     }
 
     struct TokenTotals {
@@ -240,7 +253,27 @@ enum PlatformClient {
         }
         struct Bucket: Decodable { let time: Int; let usage: Usage }
         struct Series: Decodable { let model: String?; let buckets: [Bucket] }
+
+        /// 检索那份：usage 里只有一个 FUNCTION_CALL，不是 token。
+        struct FunctionUsage: Decodable {
+            let calls: Int
+            private enum CodingKeys: String, CodingKey { case calls = "FUNCTION_CALL" }
+
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                calls = (try? c.decodeIfPresent(Int.self, forKey: .calls)) ?? 0
+            }
+        }
+        struct FunctionBucket: Decodable { let time: Int; let usage: FunctionUsage }
+        struct FunctionSeries: Decodable { let model: String?; let buckets: [FunctionBucket] }
+
         let series: [Series]
+        let functionSeries: [FunctionSeries]?
+
+        private enum CodingKeys: String, CodingKey {
+            case series
+            case functionSeries = "function_series"
+        }
     }
 }
 

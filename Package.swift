@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "DSMeter",
+    name: "PIMeter",
     platforms: [.macOS(.v13)],
     targets: [
-        .executableTarget(name: "DSMeter", path: "Sources/DSMeter")
+        .executableTarget(name: "PIMeter", path: "Sources/PIMeter")
     ]
 )

@@ -1,14 +1,20 @@
 import AppKit
+import Combine
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let meter = Meter()
+    private var cancellables = Set<AnyCancellable>()
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var settingsWindow: NSWindow?
     /// 面板开着时用的节奏：一般只开几秒，多花的就是两三次请求。
     private var panelTimer: Timer?
     private let panelInterval: TimeInterval = 15
+    /// 面板开着时盯着「面板以外的那一下点击」。
+    /// `.transient` 只管「本 app 内部点了别处」，而菜单栏工具绝大多数时候根本不是 active app（点完全不会 deactivate），
+    /// 于是点桌面、点别的 app 面板就不收——他 2026-11-07 报的就是这个。
+    private var outsideClickMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NotificationCenter.default.addObserver(
@@ -20,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.popover.performClose(nil)
         }
         NotificationCenter.default.addObserver(
-            forName: .dsMeterOpenSettings,
+            forName: .piMeterOpenSettings,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -31,6 +37,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupPopover()
         meter.onChange = { [weak self] in self?.render() }
         meter.start()
+        // 服务状态：feed 自己排自己的节奏（10 分钟一次，失败退让），通知拿不到授权时灯会变红。
+        ServiceStatus.shared.start()
+        ServiceStatus.shared.$serviceAlert
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.render() }
+            .store(in: &cancellables)
         observeSleep()
         render()
 
@@ -38,6 +50,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if Account.apiKey == nil, Account.consoleToken == nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in self?.togglePopover() }
         }
+
+        // 改名（DS Meter → PI Meter）换 bundle id 后读不到旧 domain，把旧偏好一次性搬过来。
+        migrateDefaultsIfNeeded()
+        // 旧 label 的 LaunchAgent 还在就换到新 label，别让自启指着不存在的路径。
+        LoginItem.migrateLegacyAgent()
 
         // 默认开机自启：第一次跑就装上；用户自己关过就不再自动装。
         if UserDefaults.standard.object(forKey: "autoStart") == nil {
@@ -55,6 +72,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - 状态栏
 
+    /// 旧 bundle id（app.dsmeter.macos）domain 里已有的键搬到新 domain，搬完写标记，不重复搬。
+    private func migrateDefaultsIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: "piMeterMigrated") else { return }
+        if let old = defaults.persistentDomain(forName: "app.dsmeter.macos") {
+            for (key, value) in old where !["piMeterMigrated"].contains(key) {
+                defaults.set(value, forKey: key)
+            }
+        }
+        defaults.set(true, forKey: "piMeterMigrated")
+    }
+
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         guard let button = statusItem.button else { return }
@@ -64,11 +93,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.toolTip = T.statusTooltip.s
     }
 
-    /// 灯：闲时绿、高峰黄（高峰单价 2 倍）。数字是今天的花费。
+    /// 灯：闲时绿、高峰黄（高峰单价 2 倍）、服务出事红（通知拿不到授权时的降级信号）。数字是今天的花费。
     private func render() {
         guard let button = statusItem.button else { return }
         let amount = meter.snap.hasData ? Fmt.money(meter.snap.primaryToday) : "—"
-        button.attributedTitle = StatusTitle.make(amount: amount, tone: PeakHours.now.tone)
+        button.attributedTitle = StatusTitle.make(amount: amount, tone: PeakHours.now.tone,
+                                                  serviceAlert: ServiceStatus.shared.serviceAlert)
     }
 
     @objc private func statusClicked() {
@@ -88,6 +118,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 系统的展开动画要 200ms 左右，点开就是「等一下」；关掉它，先出内容。
         popover.animates = false
         let controller = NSHostingController(rootView: MeterPanel(meter: meter))
+        // 面板多高由内容说了算（2026-11-08）：NSHostingController 默认**不**把内容的理想尺寸
+        // 交给 popover，preferredContentSize 一直是 (0,0)，窗口就自己拿了个尺寸——
+        // 实测刚弹出来那一下宿主视图被塞成 420×250（内容要 420×586），切到昨天再切回来
+        // 也会差 7～11pt。宿主视图一矮，SwiftUI 只能把里面的东西压下去，顶上「今天花费 /
+        // 今日 token」那两个大数（挂着 minimumScaleFactor）就跟着变小——他报的「切昨天今天这块
+        // 大小会变」就是这么来的，不是下面把它挤了。加上这一档，容器高度跟着内容长/收。
+        controller.sizingOptions = [.preferredContentSize]
         popover.contentViewController = controller
         // 预热：把视图先建好、量好，别等第一次点开才排版。
         controller.view.layoutSubtreeIfNeeded()
@@ -105,6 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         meter.refreshOnOpen()
         guard let button = statusItem.button else { return }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        startOutsideClickMonitor()
         startPanelRefresh()
         Timing.mark("show 返回")
         // 先出窗口再激活：反过来的话要等激活那一步才看得见。
@@ -115,9 +153,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 面板开着的时候每 15 秒取一次（面板一般只开几秒，代价就是两三次请求）；
     /// 关掉、睡下去都立刻停——CPU 和电费都只花在看着它的那几秒里。
     private func startPanelRefresh() {
-        panelTimer?.invalidate()
         panelTimer = Timer.scheduledTimer(withTimeInterval: panelInterval, repeats: true) { [weak self] _ in
             self?.meter.refresh()
+        }
+    }
+
+    // MARK: - 点面板外面那一下
+
+    /// 全局鼠标监听：只认面板以外的按下（面板内部的点击走不到这里）。
+    /// 鼠标类的全局监听不需要辅助功能权限（键盘事件才要），所以这里不会弹权限框。
+    private func startOutsideClickMonitor() {
+        stopOutsideClickMonitor()
+        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] _ in
+            guard let self, self.popover.isShown else { return }
+            self.popover.performClose(nil)
+        }
+    }
+
+    private func stopOutsideClickMonitor() {
+        if let monitor = outsideClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            outsideClickMonitor = nil
         }
     }
 
@@ -176,7 +234,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let controller = NSHostingController(rootView: SettingsView(meter: meter))
         let window = NSWindow(contentViewController: controller)
-        window.title = "DS Meter"
+        window.title = "PI Meter"
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         window.center()
@@ -232,13 +290,14 @@ extension AppDelegate: NSPopoverDelegate {
     /// 点外面、按 Esc 都会走到这里（不只是我们自己的 performClose），统一在这停掉快节奏。
     func popoverDidClose(_ notification: Notification) {
         stopPanelRefresh()
+        stopOutsideClickMonitor()
         // 面板收了就把那条 30 天也收掉：下次点开不该还开着上回那条。
-        NotificationCenter.default.post(name: .dsMeterPanelClosed, object: nil)
+        NotificationCenter.default.post(name: .piMeterPanelClosed, object: nil)
     }
 }
 
 extension Notification.Name {
     /// 面板里的「打开账号…」按钮：面板 hosted 在 AppDelegate 里，用通知喊一声。
-    static let dsMeterOpenSettings = Notification.Name("DSMeterOpenSettings")
-    static let dsMeterPanelClosed = Notification.Name("DSMeterPanelClosed")
+    static let piMeterOpenSettings = Notification.Name("PIMeterOpenSettings")
+    static let piMeterPanelClosed = Notification.Name("PIMeterPanelClosed")
 }

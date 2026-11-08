@@ -14,6 +14,22 @@ struct ProbeReport: Encodable {
         let cny: Double
     }
 
+    /// 一条子线程来源的自检数。
+    struct LaneUsage: Encodable {
+        var calls: Int = 0
+        var tokens: Int = 0
+        var hourly: [Int] = []
+        var daily: [Int: Int] = [:]
+        /// 今天这份若走 DeepSeek flash 付费 API 要花多少钱（元）：自检脚本对照基准脚本用。
+        var equivalent: Double = 0
+        /// CC 自带联网（WebSearch / WebFetch）今天多少次：对拍 /tmp/ref_ccweb.py 的 web。
+        var webCalls: Int = 0
+        /// 走 DeepSeek key 的检索脚本次数（已在账单里）：对拍同脚本的 viaDS。
+        var searchViaDS: Int = 0
+        /// 自带联网按小时的分布：同刻对拍用。
+        var hourlyWeb: [Int] = []
+    }
+
     let hasData: Bool
     let usageError: String
     let balance: Double
@@ -30,11 +46,22 @@ struct ProbeReport: Encodable {
     let yesterdayWeekday: Int
     let yesterdayHitRate: Double
     let moneyComplete: Bool
-    /// 日均是拟合值（Trend），runwayDays 是面板上那个「还能撑 N 天」
+    /// 日均是加权平均（Trend），runwayDays 是面板上那个「还能撑 N 天」
     let burnRate: Double
+    /// 今天过了多少小时：burnRate 里今天那一段只按这个时长折算，有它才能拿 daily 复核
+    let elapsedHours: Double
     let yesterdayMissRate: Double
     let runwayDays: Int
     let requests: Int
+    /// 检索：搜索 + 抓取各多少次，以及按 0.005/次 算出来的钱
+    let searchCalls: Int
+    let fetchCalls: Int
+    let toolCost: Double
+    let hourToolCalls: [Int]
+    /// 子线程：每条来源一份（键是 SubagentLane.id，如 "cc" / "pi"）——
+    /// 今天次数、今天 token、今天按小时、近 30 天按天（偏移 → 次数）。
+    /// 逐日对独立基准（/tmp/pi-lanes-reference.py）用；历史日必须精确相等。
+    var subagents: [String: LaneUsage] = [:]
     let yesterdayRequests: Int
     /// 一次请求平均多少 token：token 总量 ÷ 请求数
     let perRequestTokens: Double

@@ -34,7 +34,7 @@ done <<< "$(git cat-file --batch-all-objects --batch-check='%(objectname) %(obje
 [ "$count" -eq 0 ] && say "  ✓ 历史里也没有"
 
 say "3) 网络域名白名单"
-allowed="api.deepseek.com platform.deepseek.com api-docs.deepseek.com github.com www.apple.com 127.0.0.1"
+allowed="api.deepseek.com platform.deepseek.com status.deepseek.com api-docs.deepseek.com github.com www.apple.com 127.0.0.1"
 domains=$(grep -rhoE "https?://[A-Za-z0-9._-]+" Sources scripts .github packaging README.md 2>/dev/null \
     | sed -E 's#https?://##' | sort -u)
 bad=0

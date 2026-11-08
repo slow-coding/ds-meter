@@ -8,10 +8,12 @@ enum StatusTitle {
     /// 灯底边离基线多远：让它落在数字的视觉中线上（13pt 的字，数字中线约在基线上 4.5pt）。
     private static let dotRise: CGFloat = 1.1
 
-    static func make(amount: String, tone: PeakHours.Tone) -> NSAttributedString {
+    static func make(amount: String, tone: PeakHours.Tone, serviceAlert: Bool = false) -> NSAttributedString {
         let title = NSMutableAttributedString()
         let attachment = NSTextAttachment()
-        attachment.image = dot(color: tone == .peak ? .systemYellow : .systemGreen)
+        // 红 = 服务出问题，压过闲时/高峰的颜色（2026-11-07 加：通知授权拿不到时的降级信号）。
+        let color: NSColor = serviceAlert ? .systemRed : (tone == .peak ? .systemYellow : .systemGreen)
+        attachment.image = dot(color: color)
         attachment.bounds = CGRect(x: 0, y: dotRise, width: dotDiameter, height: dotDiameter)
         title.append(NSAttributedString(attachment: attachment))
         title.append(NSAttributedString(string: " ", attributes: [.font: NSFont.systemFont(ofSize: fontSize)]))

@@ -1,10 +1,11 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
 /// 命令行自检：把数字打出来，把面板存成 PNG。
-///   DSMeter --probe [--snapshot 目录] [--status 目录]
-///   DSMeter --probe --demo --snapshot 目录   假数据出图（不读凭据）
-///   DSMeter --probe --login-check [--snapshot 目录]   打开登录窗口，看页面开没开
+///   PIMeter --probe [--snapshot 目录] [--status 目录]
+///   PIMeter --probe --demo --snapshot 目录   假数据出图（不读凭据）
+///   PIMeter --probe --login-check [--snapshot 目录]   打开登录窗口，看页面开没开
 enum Probe {
     /// 出图倍数：`--scale N` 改，默认 2（retina）。
     private static var captureScale: CGFloat = 2
@@ -15,6 +16,23 @@ enum Probe {
         return 1 - hit
     }
 
+    /// --status-live 里每天那格的日期（MM-dd）和状态名。面板灯条同一份，取证对照用。
+    static func probeDayText(offset: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM-dd"
+        formatter.timeZone = PeakHours.timeZone
+        return formatter.string(from: PeakHours.daysBefore(offset))
+    }
+
+    static func probeStateName(_ state: ServiceStatus.DayState) -> String {
+        switch state {
+        case .normal: return "normal"
+        case .degraded: return "degraded"
+        case .partial: return "partial"
+        case .uncovered: return "uncovered"
+        }
+    }
+
     static func run(arguments: [String]) -> Never {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.accessory)
@@ -23,6 +41,43 @@ enum Probe {
         // 自检：那条 30 天开着的时候，在面板别处点一下，看它收没收。
         // 合成一次真点击走窗口（不是调函数），所以必须跑真的 NSApp.run：没起事件循环时
         // 窗口不是 key，SwiftUI 收不到点击（这个坑踩过，见 --tap 实现）。
+        // 节假日判定的自检：五天五个期望（国庆 / 普通工作日 / 调休上班的周六 / 普通周五 / 表外的年份）。
+        if arguments.contains("--probe-peak") {
+            let parser = DateFormatter()
+            parser.dateFormat = "yyyy-MM-dd"
+            parser.timeZone = PeakHours.timeZone
+            let cases: [(day: String, expect: String)] = [
+                ("2026-10-01", "闲时"), // 周四，国庆
+                ("2026-10-08", "高峰"), // 周四，普通工作日
+                ("2026-02-14", "闲时"), // 周六，调休上班，仍是周末 → 闲时
+                ("2026-11-06", "高峰"), // 周五，普通工作日
+                ("2027-01-04", "高峰"), // 周一，表里没有 2027 → 退回星期几规则
+            ]
+            var failed = false
+            for entry in cases {
+                guard let date = parser.date(from: entry.day) else {
+                    print("\(entry.day): 日期解析失败")
+                    failed = true
+                    continue
+                }
+                let peak = PeakHours.isPeak(hour: 10, weekday: PeakHours.weekday(of: date), day: entry.day)
+                // 两条入口必须同答：带星期几的（账单、柱子）和带时刻的（灯、now）。
+                let peakViaDate = PeakHours.isPeak(hour: 10, on: date)
+                let actual = peak ? "高峰" : "闲时"
+                let ok = actual == entry.expect && peakViaDate == peak
+                failed = failed || !ok
+                print("\(entry.day) 10:00 → \(actual)（期望 \(entry.expect)）\(ok ? "✓" : "✗")  灯那条入口：\(peakViaDate ? "高峰" : "闲时")")
+            }
+            print("holidaysStaleYear: \(PeakHours.holidaysStaleYear.map(String.init) ?? "nil")")
+            exit(failed ? 5 : 0)
+        }
+
+        // 通知自检：必须用户手动跑这条命令才会走到这里（自启 / 菜单栏路径不经过 Probe），
+        // 所以请求授权、弹测试通知都只发生在人主动调它的时候。
+        if arguments.contains("--notify-check") {
+            NotifyCheck.run()
+        }
+
         if arguments.contains("--tap-check") {
             let point = arguments.firstIndex(of: "--tap-check").flatMap { index -> CGFloat? in
                 guard index + 1 < arguments.count, let y = Double(arguments[index + 1]) else { return nil }
@@ -56,6 +111,53 @@ enum Probe {
             exit(3)
         }
 
+        // 服务状态自检：feed 有没有读到、最新事件、本机探测样本。
+        // 验收只认这条命令——同一台机器 curl 到 status.deepseek.com 会被 reset（000），
+        // URLSession 却是 200，两条路结论相反，别拿 curl 当可达性判据。
+        if arguments.contains("--status-live") {
+            ServiceStatus.shared.notificationsEnabled = false // 自检不替用户发通知
+            ServiceStatus.shared.refreshIfNeeded()
+            let deadline = Date().addingTimeInterval(12)
+            while Date() < deadline, !ServiceStatus.shared.attemptedOnce {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+            }
+            let status = ServiceStatus.shared
+            // JSON 一律走 JSONSerialization（2026-11-07）：手拼字符串不转义引号，
+            // 事件标题里自带双引号时整段不是合法 JSON，json.load 直接报错。
+            var payload: [String: Any] = [
+                "feedRead": status.feedReadable,
+                "probeCount": status.probes.count,
+                "notificationsEnabled": status.notificationsEnabled,
+                "probeSamples": status.probes.suffix(5).map { ["ok": $0.ok, "ms": Int($0.ms.rounded())] },
+            ]
+            if let event = status.event {
+                payload["event"] = [
+                    "title": event.title,
+                    "status": event.status,
+                    "updated": Fmt.clock(event.updated),
+                    "minutes": Int(Date().timeIntervalSince(event.updated) / 60),
+                ]
+            } else {
+                payload["event"] = NSNull()
+            }
+            // 最近 30 天一天一格（2026-11-07 灯条）：面板就是拿这份画的。
+            payload["days"] = status.dayCells().map { cell in
+                [
+                    "date": Self.probeDayText(offset: cell.offset),
+                    "state": Self.probeStateName(cell.state),
+                    "ongoing": cell.ongoing,
+                ] as [String: Any]
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]),
+               let text = String(data: data, encoding: .utf8) {
+                print(text)
+            } else {
+                print("{\"error\": \"status-live: JSONSerialization failed\"}")
+            }
+            fflush(stdout)
+            exit(0)
+        }
+
         let demo = arguments.contains("--demo")
         let fresh = arguments.contains("--fresh")
         // 出图倍数：默认 2（retina）。docs 里那张还要缩到 banner 里，用 3 才不糊（--scale 3）。
@@ -69,6 +171,7 @@ enum Probe {
         if demo {
             // 假数据：README 截图用，不碰网络、不读凭据
             meter.loadDemo()
+            ServiceStatus.shared.loadDemoIncidents() // 灯条上要有色，README 那张才看得见事件
             if loggedOut { meter.showLoggedOut() }
         } else if fresh {
             // 第一次打开的机器：什么都没存，余额是「—」，面板只摆设置入口
@@ -117,9 +220,14 @@ enum Probe {
             yesterdayHitRate: meter.snap.days[1]?.hitRate ?? -1,
             moneyComplete: meter.snap.moneyComplete,
             burnRate: meter.snap.burnRate ?? -1,
+            elapsedHours: (PeakHours.hourFraction(of: Date()) * 100).rounded() / 100,
             yesterdayMissRate: yesterdayMissRate(meter.snap),
             runwayDays: meter.runwayDays ?? -1,
             requests: meter.snap.today.requests,
+            searchCalls: meter.snap.today.searchCalls,
+            fetchCalls: meter.snap.today.fetchCalls,
+            toolCost: meter.snap.today.toolCost,
+            hourToolCalls: meter.snap.today.hourToolCalls,
             yesterdayRequests: meter.snap.days[1]?.requests ?? -1,
             perRequestTokens: meter.snap.today.requests > 0
                 ? Double(meter.snap.today.tokenTotal) / Double(meter.snap.today.requests)
@@ -148,6 +256,21 @@ enum Probe {
             priceStale: PeakHours.isPriceStale,
             apiKey: demo ? "demo" : Account.apiKeyOrigin
         )
+
+        // 子线程按来源：今天那份从 DayCost.subagents 来，按天那份从 Snapshot.laneDaily 来。
+        for lane in SubagentLane.all {
+            let today = meter.snap.today.subagents[lane.id]
+            report.subagents[lane.id] = ProbeReport.LaneUsage(
+                calls: today?.calls ?? 0,
+                tokens: today?.tokens ?? 0,
+                hourly: today?.hours ?? [],
+                daily: meter.snap.laneDaily[lane.id] ?? [:],
+                equivalent: today.map { DeepSeekQuote.saved(of: $0, in: meter.snap.today) } ?? 0,
+                webCalls: today?.webCalls ?? 0,
+                searchViaDS: today?.searchViaDS ?? 0,
+                hourlyWeb: today?.hourWeb ?? []
+            )
+        }
 
         // 设置窗口那张图（README 用）：离屏渲染，字段是空的
         if arguments.contains("--settings-shot") {
@@ -330,6 +453,60 @@ private final class PanelBackground: NSView {
     }
 }
 
+/// 通知自检（--notify-check）：请求授权 → 等 3 秒回读 → 打印 UNAuthorizationStatus 和能不能弹 → 发一条测试通知。
+/// 入口只在 Probe.run 里，而 Probe 只由 --probe / --notify-check 命令进——开机自启走的是 AppDelegate，
+/// 不会经过这里，所以不会自己弹。
+private final class NotifyCheck: NSObject, UNUserNotificationCenterDelegate {
+    static func run() -> Never {
+        // 裸二进制没有 bundle id，UNUserNotificationCenter 会直接抛异常：先探，探不到如实说。
+        guard Bundle.main.bundleIdentifier != nil else {
+            print("notify-check: no bundle id (bare binary) — authorization cannot be requested")
+            fflush(stdout)
+            exit(4)
+        }
+        let center = UNUserNotificationCenter.current()
+        center.delegate = NotifyCheck() // 前台也弹：本命令跑着时应用就在前台
+        center.requestAuthorization(options: [.alert]) { _, _ in }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            center.getNotificationSettings { settings in
+                DispatchQueue.main.async {
+                    let names = ["notDetermined", "denied", "authorized", "provisional", "ephemeral"]
+                    let raw = settings.authorizationStatus.rawValue
+                    let name = raw < names.count ? names[raw] : "unknown(\(raw))"
+                    let canPresent = settings.authorizationStatus == .authorized && settings.alertSetting == .enabled
+                    print("UNAuthorizationStatus: \(name) (\(raw))")
+                    print("alertSetting: \(settings.alertSetting.rawValue) (2 = enabled)")
+                    print("canPresent: \(canPresent)")
+                    let content = UNMutableNotificationContent()
+                    content.title = "PI Meter 通知自检"
+                    content.body = "看到这条说明通知链路通了。"
+                    center.add(UNNotificationRequest(identifier: "notify-check", content: content, trigger: nil)) { error in
+                        if let error {
+                            print("notification add failed: \(error.localizedDescription)")
+                        } else {
+                            print("notification sent")
+                        }
+                        fflush(stdout)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { exit(0) }
+                    }
+                }
+            }
+        }
+        let deadline = Date().addingTimeInterval(20)
+        while Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        print("notify-check: timed out waiting for authorization flow")
+        fflush(stdout)
+        exit(5)
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        [.banner]
+    }
+}
+
 /// 自检：面板底下点一下，那条 30 天收不收。
 private final class TapCheck: NSObject, NSApplicationDelegate {
     static func run(point: CGFloat) {
@@ -349,6 +526,7 @@ private final class TapCheck: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ note: Notification) {
         let meter = Meter()
         meter.loadDemo()
+        ServiceStatus.shared.loadDemoIncidents()
         let hosting = NSHostingView(rootView: MeterPanel(meter: meter, pickerStartOpen: true))
         hosting.layoutSubtreeIfNeeded()
         let size = hosting.fittingSize

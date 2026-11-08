@@ -5,7 +5,7 @@ import WebKit
 /// 用户在网页里登录（手机验证码 / 密码 / 微信扫码都行），
 /// 我们从同一个页面的 localStorage 里读 `userToken`——不需要 DevTools，也不需要浏览器调试端口。
 ///
-/// 登录态留在 WKWebView 自己的数据目录（`~/Library/WebKit/app.dsmeter.macos`）：
+/// 登录态留在 WKWebView 自己的数据目录（`~/Library/WebKit/app.pimeter.macos`）：
 /// token 过期时再点一次「登录网页读取」，通常还是登录状态，读到就走，不用重新输密码。
 /// 不想要这层登录态就点「退出网页登录」，cookie 和 localStorage 一起清掉。
 final class LoginWindow: NSObject, NSWindowDelegate {

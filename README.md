@@ -1,4 +1,4 @@
-# DS Meter
+# PI Meter
 
 ![banner](docs/banner.png?v=1.0.3)
 
@@ -12,15 +12,15 @@
 
 ## 30 秒上手
 
-**最快**：从 [Releases](../../releases) 下 `DS-Meter-<版本>.dmg`，拖进「应用程序」，打开。第一次会被系统拦一次（没有开发者签名），放行方法见下面「装」。
+**最快**：从 [Releases](../../releases) 下 `PI-Meter-<版本>.dmg`，拖进「应用程序」，打开。第一次会被系统拦一次（没有开发者签名），放行方法见下面「装」。
 
-**用 Homebrew**：`brew install --cask <账号>/ds-meter/ds-meter`，不用放行。
+**用 Homebrew**：`brew install --cask <账号>/pi-meter/pi-meter`，不用放行。
 
 **自己编**（要先有 Xcode 命令行工具）：
 
 ```bash
-git clone https://github.com/slow-coding/ds-meter && cd ds-meter && ./scripts/build-app.sh
-open "/Applications/DS Meter.app"
+git clone https://github.com/slow-coding/pi-meter && cd pi-meter && ./scripts/build-app.sh
+open "/Applications/PI Meter.app"
 ```
 
 然后：菜单栏那格 → 「登录网页读取」→ 登录 → 出数。
@@ -32,10 +32,10 @@ open "/Applications/DS Meter.app"
 ## 安全：全本地，没有服务器
 
 - **没有任何服务器**。这个项目没有后端、没有账号体系、没有统计上报、没有第三方 SDK、没有自动更新通道。
-- **只连两个域名**：`api.deepseek.com`（查余额）、`platform.deepseek.com`（读账单）。没有第三个。
-- **凭据只存本机**：`~/Library/Application Support/DSMeter/account.json`，目录 `0700`、文件 `0600`，只有你这个用户能读；网页登录态在 `~/Library/WebKit/app.dsmeter.macos`。设置里「删除已存凭据 / 退出网页登录」分别清掉。
-- **不读你的内容**：不读对话、不读会话日志、不读别的 app 的数据。账单响应只在内存里（磁盘缓存关掉了），不落盘。
-- **可以自己核**：源码两千多行，`--probe` 会把当前所有数字打出来；Little Snitch 之类的工具看它只连那两个域名。
+- **只连三个域名**：`api.deepseek.com`（查余额）、`platform.deepseek.com`（读账单）、`status.deepseek.com`（读官方状态页，只取内容、不带凭据）。没有第四个。
+- **凭据只存本机**：`~/Library/Application Support/PIMeter/account.json`，目录 `0700`、文件 `0600`，只有你这个用户能读；网页登录态在 `~/Library/WebKit/app.pimeter.macos`。设置里「删除已存凭据 / 退出网页登录」分别清掉。
+- **不读你的内容**：不读对话、不读别的 app 的数据。唯一读的是 `~/.claude/projects` 里 Claude Code 的调用记录——只数次数和模型名，不看 prompt 和回答，不出本机。账单响应只在内存里（磁盘缓存关掉了），不落盘。
+- **可以自己核**：源码两千多行，`--probe` 会把当前所有数字打出来；Little Snitch 之类的工具看它只连那三个域名。
 - **诚实的边界**：登录态等于你账号的钥匙，Mac 被攻破就能被读走——跟浏览器里的 cookie 是同一级风险。所以给了「退出网页登录」，也建议不用时点一下。
 - 完整的安全说明、威胁模型和自查命令见 [`SECURITY.md`](SECURITY.md)；每次 push / PR / 发版都会跑 `scripts/security-audit.sh`。
 
@@ -51,14 +51,14 @@ open "/Applications/DS Meter.app"
 
 ### 方式一：dmg
 
-1. 从 [Releases](../../releases) 下载 `DS-Meter-<版本>.dmg`，拖进「应用程序」。
+1. 从 [Releases](../../releases) 下载 `PI-Meter-<版本>.dmg`，拖进「应用程序」。
 2. 第一次打开会被拦一次（没有开发者签名，正常现象）：
    - macOS 15+：系统设置 → 隐私与安全 → 滚到底 → 「仍要打开」；
-   - 或者终端：`xattr -dr com.apple.quarantine "/Applications/DS Meter.app"`。
+   - 或者终端：`xattr -dr com.apple.quarantine "/Applications/PI Meter.app"`。
 3. 想核对下载有没有被换过：
 
 ```bash
-shasum -a 256 ~/Downloads/DS-Meter-1.0.0.dmg
+shasum -a 256 ~/Downloads/PI-Meter-1.0.0.dmg
 # 和 Release 里的 SHA256SUMS 对一下
 ```
 
@@ -67,12 +67,12 @@ dmg 是 universal（Apple Silicon + Intel），macOS 13+。
 ### 方式二：Homebrew
 
 ```bash
-brew tap slow-coding/ds-meter
-brew trust slow-coding/ds-meter      # 新版 Homebrew 要求显式信任第三方 tap
-brew install --cask ds-meter
+brew tap slow-coding/pi-meter
+brew trust slow-coding/pi-meter      # 新版 Homebrew 要求显式信任第三方 tap
+brew install --cask pi-meter
 ```
 
-升级：`brew upgrade --cask ds-meter`。
+升级：`brew upgrade --cask pi-meter`。
 
 > 实测（macOS 27 + Homebrew 7）：brew 装出来的 app 虽然带 `com.apple.quarantine`，但系统对包管理器这一类不弹窗，直接能开；浏览器下载的 dmg 会弹。这条行为随 macOS 版本变，真被拦了就按方式一放行。
 >
@@ -91,10 +91,10 @@ brew install --cask ds-meter
 不需要 Node、Python、Homebrew，也不需要付费的 Apple 开发者账号。
 
 ```bash
-git clone https://github.com/slow-coding/ds-meter
-cd ds-meter
+git clone https://github.com/slow-coding/pi-meter
+cd pi-meter
 ./scripts/build-app.sh     # 编 + 装进 /Applications，约 10 秒
-open "/Applications/DS Meter.app"
+open "/Applications/PI Meter.app"
 ```
 
 `xcode-select --install` 必须等它装完再编，否则会报 `swift: command not found`。
@@ -112,8 +112,8 @@ open "/Applications/DS Meter.app"
 
 - `swift: command not found` → 命令行工具没装好，重跑 `xcode-select --install`。
 - `xcodebuild: error: tool requires Xcode` → 装了完整 Xcode 但没同意协议：`sudo xcodebuild -license accept`。
-- 「已损坏，无法打开」→ 先 `xattr -dr com.apple.quarantine "/Applications/DS Meter.app"`；还不行就是包在传输里坏了，用 sha256 对一下。
-- 想只在终端里跑、不装 app：`swift build -c release` 之后用 `.build/release/DSMeter`。
+- 「已损坏，无法打开」→ 先 `xattr -dr com.apple.quarantine "/Applications/PI Meter.app"`；还不行就是包在传输里坏了，用 sha256 对一下。
+- 想只在终端里跑、不装 app：`swift build -c release` 之后用 `.build/release/PIMeter`。
 
 ## 两种用法
 
@@ -155,13 +155,13 @@ open "/Applications/DS Meter.app"
 ```bash
 swift build -c release
 
-.build/release/DSMeter --probe                                  # 真数据打一遍数字
-.build/release/DSMeter --probe --demo --snapshot /tmp/dsm --status /tmp/dsm   # 假数据出图
-.build/release/DSMeter --probe --demo --logged-out --snapshot /tmp/dsm        # 「还没登录」那屏
-.build/release/DSMeter --probe --fresh --snapshot /tmp/dsm                    # 「第一次打开」那屏
-.build/release/DSMeter --probe --fresh --settings-shot --snapshot /tmp/dsm    # 设置页
-.build/release/DSMeter --probe --login-check --snapshot /tmp/dsm              # 登录窗口自检
-.build/release/DSMeter --probe --demo --scale 3 --snapshot /tmp/dsm \
+.build/release/PIMeter --probe                                  # 真数据打一遍数字
+.build/release/PIMeter --probe --demo --snapshot /tmp/dsm --status /tmp/dsm   # 假数据出图
+.build/release/PIMeter --probe --demo --logged-out --snapshot /tmp/dsm        # 「还没登录」那屏
+.build/release/PIMeter --probe --fresh --snapshot /tmp/dsm                    # 「第一次打开」那屏
+.build/release/PIMeter --probe --fresh --settings-shot --snapshot /tmp/dsm    # 设置页
+.build/release/PIMeter --probe --login-check --snapshot /tmp/dsm              # 登录窗口自检
+.build/release/PIMeter --probe --demo --scale 3 --snapshot /tmp/dsm \
   && cp /tmp/dsm/panel.png docs/panel.png                                      # README 那张面板图（假数据）
 swift scripts/make-banner.swift                                                # 重新生成 banner
 ```
@@ -184,15 +184,15 @@ A menu bar item: a dot + today's spend. Green = off-peak (half price), yellow = 
 
 ## Quick start
 
-**Fastest**: grab `DS-Meter-<version>.dmg` from [Releases](../../releases), drag it into Applications, open it. macOS blocks it once (no developer signature); see Install below for the one-time override.
+**Fastest**: grab `PI-Meter-<version>.dmg` from [Releases](../../releases), drag it into Applications, open it. macOS blocks it once (no developer signature); see Install below for the one-time override.
 
-**With Homebrew**: `brew install --cask <user>/ds-meter/ds-meter` — no Gatekeeper prompt.
+**With Homebrew**: `brew install --cask <user>/pi-meter/pi-meter` — no Gatekeeper prompt.
 
 **Build it yourself**:
 
 ```bash
-git clone https://github.com/slow-coding/ds-meter && cd ds-meter && ./scripts/build-app.sh
-open "/Applications/DS Meter.app"
+git clone https://github.com/slow-coding/pi-meter && cd pi-meter && ./scripts/build-app.sh
+open "/Applications/PI Meter.app"
 ```
 
 Then: menu bar → **Sign in on web** → sign in → done.
@@ -205,8 +205,8 @@ The date button unrolls the last 30 days as a strip; click a day to inspect it.
 
 - **No backend at all.** No server, no accounts, no telemetry, no third-party SDK, no auto-update channel.
 - **Two hosts, period**: `api.deepseek.com` (balance) and `platform.deepseek.com` (billing).
-- **Credentials stay on disk, for you only**: `~/Library/Application Support/DSMeter/account.json`, directory `0700`, file `0600`; the web sign-in state lives in `~/Library/WebKit/app.dsmeter.macos`. Both can be wiped from Settings.
-- **Your content is never read**: no conversations, no session logs, no other apps' data. Billing responses live in memory only (disk cache is disabled).
+- **Credentials stay on disk, for you only**: `~/Library/Application Support/PIMeter/account.json`, directory `0700`, file `0600`; the web sign-in state lives in `~/Library/WebKit/app.pimeter.macos`. Both can be wiped from Settings.
+- **Your content is never read**: no conversations, no other apps' data. The one local source it reads is `~/.claude/projects` — Claude Code's own call records, counted by model and time only; prompts and answers are never touched, and nothing leaves the machine. Billing responses live in memory only (disk cache is disabled).
 - **Verify it yourself**: ~2.6k lines of source, `--probe` prints every number it holds, Little Snitch shows only those two hosts.
 - **Honest limit**: the sign-in token is effectively an account key. If your Mac is compromised, it can be read — same risk class as browser cookies. That is why "Sign out of web" exists.
 - Full security notes, threat model and self-check commands: [`SECURITY.md`](SECURITY.md). `scripts/security-audit.sh` runs on every push, PR and release.
@@ -223,14 +223,14 @@ Three ways, same app. **None of them carries a developer signature**: `Signature
 
 ### Option 1: dmg
 
-1. Download `DS-Meter-<version>.dmg` from [Releases](../../releases), drag it into Applications.
+1. Download `PI-Meter-<version>.dmg` from [Releases](../../releases), drag it into Applications.
 2. The first launch is blocked once (no developer signature; expected):
    - macOS 15+: System Settings → Privacy & Security → scroll down → "Open Anyway";
-   - or in a terminal: `xattr -dr com.apple.quarantine "/Applications/DS Meter.app"`.
+   - or in a terminal: `xattr -dr com.apple.quarantine "/Applications/PI Meter.app"`.
 3. Check the download if you want:
 
 ```bash
-shasum -a 256 ~/Downloads/DS-Meter-1.0.0.dmg
+shasum -a 256 ~/Downloads/PI-Meter-1.0.0.dmg
 # compare with SHA256SUMS in the release
 ```
 
@@ -239,12 +239,12 @@ The dmg is universal (Apple Silicon + Intel), macOS 13+.
 ### Option 2: Homebrew
 
 ```bash
-brew tap slow-coding/ds-meter
-brew trust slow-coding/ds-meter      # recent Homebrew requires explicit trust for third-party taps
-brew install --cask ds-meter
+brew tap slow-coding/pi-meter
+brew trust slow-coding/pi-meter      # recent Homebrew requires explicit trust for third-party taps
+brew install --cask pi-meter
 ```
 
-Upgrade with `brew upgrade --cask ds-meter`.
+Upgrade with `brew upgrade --cask pi-meter`.
 
 > Measured on macOS 27 + Homebrew 7: the app installed by brew does carry `com.apple.quarantine`, but macOS does not prompt for package-manager downloads; browser downloads do. This behaviour changes across macOS releases — if you do get blocked, use the override in Option 1.
 >
@@ -261,10 +261,10 @@ Upgrade with `brew upgrade --cask ds-meter`.
 No Node, no Python, no Homebrew, no paid Apple Developer account.
 
 ```bash
-git clone https://github.com/slow-coding/ds-meter
-cd ds-meter
+git clone https://github.com/slow-coding/pi-meter
+cd pi-meter
 ./scripts/build-app.sh
-open "/Applications/DS Meter.app"
+open "/Applications/PI Meter.app"
 ```
 
 Wait for `xcode-select --install` to finish before building, or you will get `swift: command not found`.
@@ -282,8 +282,8 @@ The first run registers a login item (can be turned off). Uninstall with `./scri
 
 - `swift: command not found` → command line tools are missing: rerun `xcode-select --install`.
 - `xcodebuild: error: tool requires Xcode` → full Xcode installed but license not accepted: `sudo xcodebuild -license accept`.
-- "App is damaged" → run `xattr -dr com.apple.quarantine "/Applications/DS Meter.app"` first; if it persists, the download is corrupt — check sha256.
-- Just want the binary, no app: `swift build -c release`, then run `.build/release/DSMeter`.
+- "App is damaged" → run `xattr -dr com.apple.quarantine "/Applications/PI Meter.app"` first; if it persists, the download is corrupt — check sha256.
+- Just want the binary, no app: `swift build -c release`, then run `.build/release/PIMeter`.
 
 ## Two ways to use it
 
@@ -325,18 +325,18 @@ Price page: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
 ```bash
 swift build -c release
 
-.build/release/DSMeter --probe                                               # real data, print numbers
-.build/release/DSMeter --probe --demo --snapshot /tmp/dsm --status /tmp/dsm  # demo data, render PNGs
-.build/release/DSMeter --probe --demo --logged-out --snapshot /tmp/dsm       # the "not signed in" screen
-.build/release/DSMeter --probe --fresh --snapshot /tmp/dsm                   # the "first launch" screen
-.build/release/DSMeter --probe --fresh --settings-shot --snapshot /tmp/dsm   # the settings window
-.build/release/DSMeter --probe --login-check --snapshot /tmp/dsm             # opens the sign-in window
-.build/release/DSMeter --probe --demo --scale 3 --snapshot /tmp/dsm \
+.build/release/PIMeter --probe                                               # real data, print numbers
+.build/release/PIMeter --probe --demo --snapshot /tmp/dsm --status /tmp/dsm  # demo data, render PNGs
+.build/release/PIMeter --probe --demo --logged-out --snapshot /tmp/dsm       # the "not signed in" screen
+.build/release/PIMeter --probe --fresh --snapshot /tmp/dsm                   # the "first launch" screen
+.build/release/PIMeter --probe --fresh --settings-shot --snapshot /tmp/dsm   # the settings window
+.build/release/PIMeter --probe --login-check --snapshot /tmp/dsm             # opens the sign-in window
+.build/release/PIMeter --probe --demo --scale 3 --snapshot /tmp/dsm \
   && cp /tmp/dsm/panel.png docs/panel.png                                     # the README panel image (demo data)
 swift scripts/make-banner.swift                                              # regenerate the banner
 
 ./scripts/package-release.sh                                                 # build a dmg + SHA256SUMS
-REPO=owner/ds-meter ./scripts/package-release.sh                             # also emit the Homebrew cask
+REPO=owner/pi-meter ./scripts/package-release.sh                             # also emit the Homebrew cask
 ```
 
 Packaging details live in [`packaging/README.md`](packaging/README.md).

@@ -3,7 +3,7 @@ import Foundation
 /// 开机自启：写一个 LaunchAgent（`~/Library/LaunchAgents`），由系统在登录时拉起。
 /// 不用 SMAppService——它要求签名和队伍匹配，开发签名会被拒；LaunchAgent 只要路径对就稳。
 enum LoginItem {
-    static let label = "app.dsmeter.macos"
+    static let label = "app.pimeter.macos"
 
     static var plistURL: URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -16,8 +16,8 @@ enum LoginItem {
 
     @discardableResult
     static func enable() -> Bool {
-        let appPath = "/Applications/DS Meter.app"
-        let executable = "\(appPath)/Contents/MacOS/DSMeter"
+        let appPath = "/Applications/PI Meter.app"
+        let executable = "\(appPath)/Contents/MacOS/PIMeter"
         guard FileManager.default.fileExists(atPath: executable) else { return false }
 
         let plist = """
@@ -56,6 +56,23 @@ enum LoginItem {
     private static func reload() {
         run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(label)"])
         run("/bin/launchctl", ["bootstrap", "gui/\(getuid())", plistURL.path])
+    }
+
+    // MARK: - 旧 label 迁移
+
+    /// 改名前那版（DS Meter）用的 label。升级后如果它还在，按新路径重写一份新的，
+    /// 注销并删掉旧的——不然登录项会指着不存在的可执行文件。
+    private static let legacyLabel = "app.dsmeter.macos"
+
+    static func migrateLegacyAgent() {
+        let agents = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/LaunchAgents")
+        let oldPlist = agents.appendingPathComponent("\(legacyLabel).plist")
+        guard FileManager.default.fileExists(atPath: oldPlist.path) else { return }
+        run("/bin/launchctl", ["bootout", "gui/\(getuid())/\(legacyLabel)"])
+        try? FileManager.default.removeItem(at: oldPlist)
+        // 装不上新 agent 没关系：偏好里 autoStart 为真时 AppDelegate 会再补一次。
+        enable()
     }
 
     private static func run(_ tool: String, _ arguments: [String]) {

@@ -3,7 +3,7 @@ import Security
 
 /// 账号绑定：API Key 读余额，平台控制台 token 读用量。
 ///
-/// 存哪儿：`~/Library/Application Support/DSMeter/account.json`，目录 0700、文件 0600，只有本用户能读。
+/// 存哪儿：`~/Library/Application Support/PIMeter/account.json`，目录 0700、文件 0600，只有本用户能读。
 /// 为什么不用钥匙串：每次重编 app 签名都变，钥匙串会认不出同一个 app，读一次就弹一次密码框。
 enum Account {
     /// 老版本把两串凭据放在登录钥匙串里的服务名，只用来搬家。
@@ -70,6 +70,7 @@ enum Account {
     /// 再从钥匙串搬一次更早版本留下的两串（搬完就删，之后不再读）。
     static func migrateIfNeeded() {
         moveFromOldName()
+        copyFromDSMeter()
         guard !FileManager.default.fileExists(atPath: fileURL.path) else { return }
 
         var values: [String: String] = [:]
@@ -98,11 +99,37 @@ enum Account {
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
     }
 
+    /// 改名前那版（DS Meter）把凭据放在 Application Support/DSMeter 下；第一次跑新名字时**拷贝**过来。
+    /// 旧目录留着不删：有人还装着旧版，删了会把那边弄坏。
+    private static func copyFromDSMeter() {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let old = support.appendingPathComponent("DSMeter/account.json")
+        guard
+            !FileManager.default.fileExists(atPath: fileURL.path),
+            FileManager.default.fileExists(atPath: old.path)
+        else { return }
+        try? FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+        try? FileManager.default.copyItem(at: old, to: fileURL)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
+        // 网页登录态也按 bundle id 换了地方，一起拷过来，免得重新登一次。
+        let webKit = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/WebKit")
+        let oldWeb = webKit.appendingPathComponent("app.dsmeter.macos")
+        let newWeb = webKit.appendingPathComponent("app.pimeter.macos")
+        if !FileManager.default.fileExists(atPath: newWeb.path),
+           FileManager.default.fileExists(atPath: oldWeb.path) {
+            try? FileManager.default.copyItem(at: oldWeb, to: newWeb)
+        }
+    }
+
     // MARK: - 凭据文件
 
     private static var fileURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("DSMeter/account.json")
+            .appendingPathComponent("PIMeter/account.json")
     }
 
     private static func stored() -> [String: String] {

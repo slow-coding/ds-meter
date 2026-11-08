@@ -66,7 +66,7 @@ func text(_ string: String, font: NSFont, color: NSColor, x: CGFloat, top: CGFlo
 }
 
 // 左边：名字 + 一句话 + 三个标签
-_ = text("DS Meter", font: rounded(64, .bold), color: .white, x: 80, top: 186)
+_ = text("PI Meter", font: rounded(64, .bold), color: .white, x: 80, top: 186)
 _ = text(
     "DeepSeek spend, at a glance.",
     font: rounded(26, .regular),

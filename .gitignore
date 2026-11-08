@@ -11,3 +11,6 @@ build/
 *.ipa
 *.zip
 dist/
+
+# 本地 agent 的构建 gate 配置，不进仓库
+.lab.json

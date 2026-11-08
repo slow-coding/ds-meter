@@ -9,9 +9,9 @@ enum Lang {
     case zh, en
 
     /// 系统语言。`AppleLanguages` 里第一条就是当前对这个 App 生效的语言。
-    /// `DSM_LANG=en` / `DSM_LANG=zh` 可以强行指定，自检出英文截图时用。
+    /// `PIM_LANG=en` / `PIM_LANG=zh` 可以强行指定，自检出英文截图时用。
     static let current: Lang = {
-        if let forced = ProcessInfo.processInfo.environment["DSM_LANG"], !forced.isEmpty {
+        if let forced = ProcessInfo.processInfo.environment["PIM_LANG"], !forced.isEmpty {
             return forced.lowercased().hasPrefix("zh") ? .zh : .en
         }
         let preferred = UserDefaults.standard.stringArray(forKey: "AppleLanguages") ?? Locale.preferredLanguages
@@ -31,6 +31,32 @@ enum T {
     case vsYesterday, vsPreviousDay, previousDay
     case runway, runwayNoData, priceLine
     case hourChart, tokenLayer, unitPrice, unitPriceHelp, requestHelp, perRequest, requests
+    case toolCalls, toolCallsHelp
+    case subagent, subagentHelp
+    case laneCC, inBill
+    /// 全天闲时那天，闲时/高峰两根条塌成的一行。
+    case allDayOffPeakNote
+    /// 服务状态块（2026-11-07）：header 左侧、右侧三种状态、内容行、hover 说明。
+    case serviceStatus, serviceOK, serviceJitter, serviceStatusHelp
+    /// 服务状态灯条右端那句口径 + feed 覆盖不到那天的 hover。
+    case last30Days, noFeedCoverage
+    case perHour
+    /// 总 token 那个括号里的词（「合计」）。
+    case altogether
+    /// hero 左边大数的抬头：看今天/昨天用固定词，更早用「短日期 + 花费」（2026-11-07 改）。
+    case todaySpend, yesterdaySpend
+    /// hero 右边大数（当天 token 总量）的抬头。
+    case todayTokens, yesterdayTokens
+    /// 30 天那条柱顶金额的单位，缀在刻度行右端说一次口径。
+    case unitYuan
+    /// 分模型那格的抬头。
+    case byModel
+    /// hero token 括号里的档名：计费（主智能体，走 DeepSeek 账单）。
+    case billedTokens
+    /// hero 钱括号里全天闲时那天的档名。
+    case heroAllOffPeak
+    /// 账单这侧的那一排（DeepSeek）。上排叫主智能体、下排叫子智能体，是他自己定的一对词。
+    case mainThread
 
     // 菜单
     case menuRefresh, menuSettings, menuLogin, menuUsage, menuPricing, menuQuit, menuAutoStart, statusTooltip
@@ -76,6 +102,7 @@ enum T {
         case .offPeakDash: return "闲时 —"
         case .peakDash: return "高峰 —"
         case .peakAllOffPeak: return "高峰 全天闲时"
+        case .allDayOffPeakNote: return "全天闲时（2 倍价的时段一个都没有）"
         case .hit: return "命中"
         case .miss: return "未命中"
         case .hitDash: return "命中 —"
@@ -95,12 +122,35 @@ enum T {
         case .runway: return "余额还能撑"
         case .runwayNoData: return "要三整天的账单才估得出日均"
         case .priceLine: return "价格"
-        case .hourChart: return "上面一层是每小时花了多少（绿闲时、橙高峰，淡的是还没到的时段），下面一层是同一小时的 token 量；灰的是前一天同一小时"
+        case .hourChart: return "上面一层是每小时花了多少（琥珀浅 = 闲时半价、琥珀深 = 高峰双倍，最淡的是还没到的时段），下面一层是同一小时的 token 量（青 = 主线程、顶上那一段绿 = 子智能体）；浅灰的是前一天同一小时。"
         case .tokenLayer: return "token"
         case .unitPrice: return "每亿 token"
         case .requests: return "完成任务"
         case .perRequest: return "每次"
         case .requestHelp: return "平台记的请求数：一次 API 调用算一次（工具每转一圈算一次，子代理跑的也算），账单接口只给这个总数，拆不出哪几次是我自己问的。后面的「每次」= 那天的钱 ÷ 那天的请求数、那天的 token ÷ 那天的请求数。"
+        case .toolCalls: return "检索"
+        case .toolCallsHelp: return "搜索与网页抓取按次计费，每次 0.005 元，不看返回几条、也不看要不要正文。平台账单接口只给次数（tool-search / tool-fetch），这笔钱是按单价乘出来的。右边那个「＋ CC N 次」是 Claude Code 自带的联网工具（WebSearch / WebFetch），走订阅、不进这笔钱，也不并进左边的次数。"
+        case .subagent: return "子智能体"
+        case .subagentHelp: return "Claude Code 那边的调用量：年费订阅、一分钱不花（¥0）。只统计非 deepseek 的模型——模型名是 deepseek-* 的那半已经记在 DeepSeek 账单里，不重复计。按天按小时从本机日志数出来，右边是它占「子智能体 + DeepSeek 请求」的份额。「省 ¥」是这些调用若走 DeepSeek flash 付费 API 要花多少钱：按每条记录发生的小时分闲时/高峰，命中/未命中/输出分别计价，命中率用日志里实测的 cache_read 比例（不另假设），不含检索费。这层的 token 在下面那根 token 柱上是顶上那一段绿色（主线程是青的），柱高是那个小时的总量；每小时的拆分把鼠标停在柱子上看，全天总量看右边。"
+        case .laneCC: return "Claude Code"
+        case .inBill: return "已在账单"
+        case .serviceStatus: return "服务状态"
+        case .serviceOK: return "正常"
+        case .serviceJitter: return "波动"
+        case .serviceStatusHelp: return "DeepSeek 现在的服务状态：右上角那颗灯就是当前状态（正常 / 降级 / 部分中断，事件进行中会带「已 n 分钟」），点它跳 status.deepseek.com。feed 每 10 分钟拉一次（Atom，只取内容、不带凭据，官方说了算）。"
+        case .last30Days: return "最近 30 天"
+        case .noFeedCoverage: return "feed 未覆盖"
+        case .perHour: return "次/小时"
+        case .altogether: return "共"
+        case .todaySpend: return "今天花费"
+        case .todayTokens: return "今日 token"
+        case .yesterdaySpend: return "昨天花费"
+        case .yesterdayTokens: return "昨天 token"
+        case .unitYuan: return "元"
+        case .byModel: return "分模型"
+        case .billedTokens: return "计费"
+        case .heroAllOffPeak: return "全天闲时"
+        case .mainThread: return "主智能体"
         case .unitPriceHelp: return "左边：那天的花费 ÷ 那天的 token 量（命中 + 未命中 + 输出）× 1 亿；高峰时段长、缓存没命中，这个数就高。右边：每亿 token 摊到多少次「完成任务」（= 1 亿 ÷ 每次的 token 量），括号里是前一天截到同一时刻的数。一次 API 调用算完成一次（工具每转一圈、子代理跑的都在里面）。"
         case .menuRefresh: return "刷新"
         case .menuSettings: return "设置…"
@@ -148,10 +198,10 @@ enum T {
         case .pricingRule: return "高峰：北京时间工作日 9–12、14–18（法定节假日除外）；空闲价是高峰的一半。"
         case .priceStaleNote: return "之后没再看，点开确认一下"
         case .dataTitle: return "数据说明"
-        case .dataRead: return "读：余额走 api.deepseek.com（官方公开接口），账单走 platform.deepseek.com（平台网页自己在用的接口）。不读会话日志，不读对话内容。"
-        case .dataStore: return "存：凭据在 ~/Library/Application Support/DSMeter/account.json（只有本用户能读），不进日志。"
+        case .dataRead: return "读：余额走 api.deepseek.com（官方公开接口），账单走 platform.deepseek.com（平台网页自己在用的接口），服务状态走 status.deepseek.com（官方状态页，只取内容、不带凭据）。子智能体那层读本机 ~/.claude/projects 的调用记录——只数次数和模型名，不看内容，不出本机。"
+        case .dataStore: return "存：凭据在 ~/Library/Application Support/PIMeter/account.json（只有本用户能读），不进日志。"
         case .dataSend: return "发：只发上面那两个域名。没有别的服务器，没有统计上报，没有第三方 SDK。"
-        case .dataNoStore: return "不存：账单明细只在内存里；网页登录态在 ~/Library/WebKit/app.dsmeter.macos，可以一键清掉。"
+        case .dataNoStore: return "不存：账单明细只在内存里；网页登录态在 ~/Library/WebKit/app.pimeter.macos，可以一键清掉。"
         case .dataDisclaimer: return "非官方工具，与 DeepSeek 官方无关。"
         case .notSet: return "没绑定"
         case .fromEnv: return "临时：来自环境变量，没保存"
@@ -187,6 +237,7 @@ enum T {
         case .offPeakDash: return "Off-peak —"
         case .peakDash: return "Peak —"
         case .peakAllOffPeak: return "Peak — off-peak all day"
+        case .allDayOffPeakNote: return "Off-peak all day (no 2× priced hours)"
         case .hit: return "Hit"
         case .miss: return "Miss"
         case .hitDash: return "Cache hit —"
@@ -206,12 +257,35 @@ enum T {
         case .runway: return "Balance lasts"
         case .runwayNoData: return "Needs three full days of billing"
         case .priceLine: return "Prices"
-        case .hourChart: return "Top: spend per hour (green off-peak, orange peak, faded = not yet). Below: tokens for the same hour. Grey is the same hour yesterday."
+        case .hourChart: return "Top: spend per hour (light amber = off-peak half price, deep amber = peak double, faintest = not yet). Below: tokens for the same hour (teal = main agent, the green top segment = sub-agent). The pale grey is the same hour yesterday."
         case .tokenLayer: return "tokens"
         case .unitPrice: return "Per 100M tokens"
         case .requests: return "Tasks"
         case .perRequest: return "Each"
         case .requestHelp: return "Requests as the platform counts them: one per API call — every tool round and every subagent run; the billing API only gives this total. “Each” is that day's spend ÷ requests, and that day's tokens ÷ requests."
+        case .toolCalls: return "Lookups"
+        case .toolCallsHelp: return "Search and page fetches are billed per call at ¥0.005 each — not per result, not by content size. The billing API only reports the counts (tool-search / tool-fetch); the money here is count × price. The \"＋ CC N\" on the right is Claude Code's own web tools (WebSearch / WebFetch) — covered by the subscription, not part of this money or this count."
+        case .subagent: return "Sub-agent"
+        case .subagentHelp: return "Calls made by Claude Code: covered by the annual subscription, ¥0. Only non-DeepSeek models count here — calls with a deepseek-* model are already on the DeepSeek bill, never counted twice. Counted per day and hour from local logs; the figure on the right is its share of sub-agent + DeepSeek requests. “Saved ¥” is what these calls would cost on the DeepSeek flash API: split into off-peak/peak by the hour each record happened, priced separately for cache hit / miss / output, with the hit rate taken from the logged cache_read (no extra assumption); tool fees not included. Its tokens are the top segment of the token bar above — match the colour; the bar's height is still that hour's total. Hover a bar for the per-hour split, the day's total is on the right."
+        case .laneCC: return "Claude Code"
+        case .inBill: return "in bill"
+        case .serviceStatus: return "Service status"
+        case .serviceOK: return "OK"
+        case .serviceJitter: return "Degraded"
+        case .serviceStatusHelp: return "DeepSeek's current status: the light at the top right (operational / degraded / partial outage — an ongoing incident shows \"n min\"). Click it to open status.deepseek.com. The feed is fetched every 10 minutes (Atom, content only, no credentials — the official page decides)."
+        case .last30Days: return "Last 30 days"
+        case .noFeedCoverage: return "outside feed coverage"
+        case .perHour: return "per hour"
+        case .altogether: return "total"
+        case .todaySpend: return "Spent today"
+        case .todayTokens: return "Tokens today"
+        case .yesterdaySpend: return "Spent yesterday"
+        case .yesterdayTokens: return "Tokens yesterday"
+        case .unitYuan: return "¥"
+        case .byModel: return "By model"
+        case .billedTokens: return "Billed"
+        case .heroAllOffPeak: return "Off-peak all day"
+        case .mainThread: return "Main agent"
         case .unitPriceHelp: return "Left: the day's spend ÷ its tokens (cache hit + miss + output) × 100M — more peak hours or cache misses push it up. Right: completed tasks per 100M tokens (100M ÷ tokens per call), with the previous day cut to the same hour in brackets. One API call counts as one task, tool rounds and subagent runs included."
         case .menuRefresh: return "Refresh"
         case .menuSettings: return "Settings…"
@@ -259,10 +333,10 @@ enum T {
         case .pricingRule: return "Peak: Beijing time weekdays 9–12 and 14–18 (public holidays excepted); off-peak is half the peak price."
         case .priceStaleNote: return "not checked since — take a look"
         case .dataTitle: return "Data"
-        case .dataRead: return "Reads: balance from api.deepseek.com (public API), billing from platform.deepseek.com (the API the platform site itself uses). No session logs, no conversations."
-        case .dataStore: return "Stores: credentials in ~/Library/Application Support/DSMeter/account.json (readable only by you), never logged."
+        case .dataRead: return "Reads: balance from api.deepseek.com (public API), billing from platform.deepseek.com (the API the platform site itself uses). The subagent layer counts calls from ~/.claude/projects on this Mac — counts and model names only, no content, never leaves the machine."
+        case .dataStore: return "Stores: credentials in ~/Library/Application Support/PIMeter/account.json (readable only by you), never logged."
         case .dataSend: return "Sends: only to those two domains. No other server, no analytics, no third-party SDK."
-        case .dataNoStore: return "Kept in memory only: billing details. The web session lives in ~/Library/WebKit/app.dsmeter.macos and can be cleared in one click."
+        case .dataNoStore: return "Kept in memory only: billing details. The web session lives in ~/Library/WebKit/app.pimeter.macos and can be cleared in one click."
         case .dataDisclaimer: return "Unofficial tool, not affiliated with DeepSeek."
         case .notSet: return "not set"
         case .fromEnv: return "temporary, from environment"
@@ -290,28 +364,68 @@ enum L {
         Lang.current == .zh ? "\(clock) 更新" : "updated \(clock)"
     }
 
-    /// token 的单位：中文用万 / 亿，英文用 M / B（换算的除数也不一样）。
+    /// token 的单位固定，2026-11-08 他定的：面板上只出现亿（英文 B），不出现万 / K / M。
     static func tokenUnit(_ top: Double) -> (divisor: Double, suffix: String) {
         switch Lang.current {
-        case .zh:
-            if top >= 100_000_000 { return (100_000_000, "亿") }
-            if top >= 10_000 { return (10_000, "万") }
-            return (1, "")
-        case .en:
-            if top >= 1_000_000_000 { return (1_000_000_000, "B") }
-            if top >= 1_000_000 { return (1_000_000, "M") }
-            if top >= 1_000 { return (1_000, "K") }
-            return (1, "")
+        case .zh: return (100_000_000, "亿")
+        case .en: return (1_000_000_000, "B")
         }
     }
 
-    /// "11.1 亿 token" / "11.1B tokens"
-    static func tokenTotal(_ number: String, suffix: String) -> String {
-        let head = suffix.isEmpty ? number : (Lang.current == .zh ? "\(number) \(suffix)" : "\(number)\(suffix)")
+    /// token 总量带单位，量级由调用方定（同一块里的几个总数要同一个量级，见 MeterPanel.headerUnit）：
+    /// "1.1 亿 token" / "110M tokens"。默认版按这个数自己挑，两处不要混用。
+    static func tokenSize(_ tokens: Int, unit: (divisor: Double, suffix: String)) -> String {
+        let number = trimDecimal(Double(tokens) / unit.divisor)
+        let head = unit.suffix.isEmpty ? number : (Lang.current == .zh ? "\(number) \(unit.suffix)" : "\(number)\(unit.suffix)")
         return "\(head) \(T.tokenCount.s)"
     }
 
+    /// hero 抬头看更早的日子：跟短日期拼（"11-06 花费" / "11-06 spend"），词跟今天/昨天那对同源。
+    static func heroDatedSpend(_ day: String) -> String {
+        Lang.current == .zh ? "\(day) 花费" : "\(day) spend"
+    }
+
+    static func heroDatedTokens(_ day: String) -> String {
+        Lang.current == .zh ? "\(day) token" : "\(day) tokens"
+    }
+
+    /// 叠起来那根 token 柱子的悬停：「12:00 · 主智能体 2.5 亿 token · Claude Code 0.1 亿 token」。
+    /// 一根柱子是两层加起来的，分开说才看得出谁多。
+    static func stackBarHelp(hour: Int, parts: [(String, String)]) -> String {
+        ([String(format: "%02d:00", hour)] + parts.map { "\($0.0) \($0.1)" }).joined(separator: " · ")
+    }
+
+    /// 括号里那个「连子智能体一共」：「合计 1.4 亿 token」/「1.4B tokens total」。
+    static func tokenAll(_ total: String) -> String {
+        Lang.current == .zh ? "\(T.altogether.s) \(total)" : "\(total) \(T.altogether.s)"
+    }
+
     /// 「每亿 token 摊到多少次」："完成任务 595 个" / "595 tasks"。
+    /// "检索 133 次" / "133 lookups"
+    static func toolCalls(_ count: Int) -> String {
+        let number = Fmt.count(count)
+        return Lang.current == .zh ? "\(T.toolCalls.s) \(number) 次" : "\(number) \(T.toolCalls.s.lowercased())"
+    }
+
+    /// "185 次" / "185"
+    static func toolCallCount(_ count: Int) -> String {
+        let number = Fmt.count(count)
+        return Lang.current == .zh ? "\(number) 次" : number
+    }
+
+    /// 括号里的拆法："搜索 124 · 抓取 9"
+    static func toolCallsBreakdown(search: Int, fetch: Int) -> String {
+        let s = Fmt.count(search), f = Fmt.count(fetch)
+        return Lang.current == .zh ? "搜索 \(s) · 抓取 \(f)" : "\(s) search · \(f) fetch"
+    }
+
+    /// 检索层 header 的小尾巴："＋ CC 15 次" / "＋ CC 15"。
+    /// Claude Code 自带联网那几次：单列口径，不并进账单那 75 次。
+    static func ccWebCalls(_ count: Int) -> String {
+        let number = Fmt.count(count)
+        return Lang.current == .zh ? "＋ CC \(number) 次" : "＋ CC \(number)"
+    }
+
     static func tasksPer100M(_ count: Int) -> String {
         let number = Fmt.count(count)
         return Lang.current == .zh ? "\(T.requests.s) \(number) 个" : "\(number) tasks"
@@ -327,18 +441,13 @@ enum L {
         }
     }
 
-    /// 一次请求过了多少 token："16.9 万 token" / "169K tokens"。单位跟 token 那一层同一套（万/亿、K/M）。
-    static func tokenSize(_ tokens: Int) -> String {
-        let (divisor, suffix) = tokenUnit(Double(tokens))
-        let number = trimDecimal(Double(tokens) / divisor)
-        let head = suffix.isEmpty ? number : (Lang.current == .zh ? "\(number) \(suffix)" : "\(number)\(suffix)")
-        return "\(head) \(T.tokenCount.s)"
-    }
-
-    /// 柱子/总量上那个数：三位以上不留小数（"1609" 而不是 "1609.0"）。
+    /// 柱子/总量上那个数：≥100 取整；≥1 一位小数；>0 且 <1 两位小数（"0.04"）；0 就是 "0"。
+    /// 2026-11-08 单位固定成亿之后，小于 1 亿的数靠两位小数撑住（0.04 亿 = 400 万 token）。
     static func trimDecimal(_ value: Double) -> String {
-        let text = value >= 100 ? String(format: "%.0f", value) : String(format: "%.1f", value)
-        return text
+        if value >= 100 { return String(format: "%.0f", value) }
+        if value >= 1 { return String(format: "%.1f", value) }
+        if value > 0 { return String(format: "%.2f", value) }
+        return "0"
     }
 
     /// 高峰那一格的悬停说明。整句一起写：以前在调用处拼「半句 + 倍数 + 。
@@ -350,17 +459,35 @@ enum L {
             : "Peak: Beijing time weekdays 9–12 and 14–18 (public holidays excepted). Unit price is \(multiplier) the off-peak price."
     }
 
+    /// 节假日表过期那一句（只在悬停里，按年份说）。
+    static func holidayStale(year: Int) -> String {
+        Lang.current == .zh
+            ? "\(year) 年法定节假日表待更新，节假日先按周末/工作日估算。"
+            : "The \(year) public-holiday table is out of date; holidays fall back to the weekday rule."
+    }
+
     /// "余额还能撑 10 天" / "Balance lasts 10 days"
     static func runway(_ days: Int) -> String {
         Lang.current == .zh ? "\(T.runway.s) \(days) 天" : "\(T.runway.s) \(days) days"
     }
 
-    /// 「还能撑几天」的悬停说明。得说清楚它不是 30 天除一下：日均是台阶式变的，
-    /// 两种算法差两倍（实测 36 天 vs 13 天），不说清楚没人知道该不该信。
+    /// 后面那截小字：「（按今天这个速度 11 天）」。只在今天明显更快（或明显更慢）时才出现。
+    static func runwayAtPace(_ days: Int) -> String {
+        Lang.current == .zh ? "（按近一周 \(days) 天）" : "(\(days) days at this week's rate)"
+    }
+
+    /// 「还能撑几天」的悬停说明。得说清楚它不是 30 天除一下，也不是把趋势往后推，
+    /// 还要说清楚后面那截小字为什么可能更短（今天已经花到这个份上了）。
     static func runwayHelp() -> String {
         Lang.current == .zh
-            ? "余额 ÷ 现在的日均。日均不是 30 天平均，是把最近两周每天花了多少拟成一条线、取这条线现在的值——用得越来越狠的时候，30 天平均会明显偏长。"
-            : "Balance ÷ today's daily burn. The burn rate is a least-squares line through the last two weeks of daily spend, read at its current value — not a 30-day average, which overstates runway when usage is climbing."
+            ? "余额 ÷ 现在的日均。日均不是 30 天平均，也不往后推趋势：最近两周每天花了多少，越近权重越大（半衰期一天半，最近一周占九成六），今天只算已经过掉的那几个小时。后面那截「按今天这个速度」是今天已花的钱按已过时长折成整天，用来追当天的变化——加权日均再快也要等一天过去才动。"
+            : "Balance ÷ the current daily burn. Not a 30-day average, and no trend extrapolated forward: daily spend over the last two weeks, each day back counting half as much as the next (half-life 1.5 days, the last week carries 96%), with today counted only up to the current hour. The ‘today’s pace’ figure is today's spend scaled to a full day, so a jump shows up the same day."
+    }
+
+    /// 「今天花费」那行括号尾巴：「· 省 ¥23.34」/ "· ¥23.34 saved"。
+    /// 不带括号（2026-11-08 挪到花费下面那块空里，写成括号就像一句旁注，现在它是这行第三个数）。
+    static func savedMoney(_ money: String) -> String {
+        Lang.current == .zh ? "省 \(money)" : "\(money) saved"
     }
 
     /// 每亿单价后面那个对照：「（昨天 ¥5.82）」/ "(yesterday ¥5.82)"。
@@ -387,9 +514,14 @@ enum L {
         Lang.current == .zh ? "（\(relation) \(delta)）" : "(\(relation) \(delta))"
     }
 
-    /// 高峰那一格的金额。中文把倍数写在括号里，英文用 "2× rate"。
-    static func peakMoney(_ money: String, multiplier: String) -> String {
-        Lang.current == .zh ? "\(T.peak.s) \(money)（\(multiplier)价）" : "\(T.peak.s) \(money) (\(multiplier) rate)"
+    /// 高峰档的档名（倍数含在内），金额另算一节：下面那根条用它整段；hero 括号拆开用（见 peakSuffix）。
+    static var peakName: String {
+        Lang.current == .zh ? "\(T.peak.s)（\(PeakHours.multiplierLabel)价）" : "\(T.peak.s) (\(PeakHours.multiplierLabel) rate)"
+    }
+
+    /// hero 钱括号里跟在金额后面的倍数：「高峰 ¥49.41（2 倍价）」——档名干净、数字贴着档名，倍数缀在最后。
+    static var peakSuffix: String {
+        Lang.current == .zh ? "（\(PeakHours.multiplierLabel)价）" : " (\(PeakHours.multiplierLabel) rate)"
     }
 
     /// "2 倍" / "2×"
@@ -425,5 +557,30 @@ enum L {
     static func languageLine() -> String {
         let name = Lang.current == .zh ? "中文" : "English"
         return Lang.current == .zh ? "跟随系统（\(name)）" : "Follows the system (\(name))"
+    }
+
+    // MARK: - 服务状态（2026-11-07）
+
+    /// header 右侧：「部分中断 · 已 17 分钟」/ "Partial outage · 17 min"。开不满 1 分钟按 1 分钟说。
+    static func serviceOngoing(minutes: Int) -> String {
+        let minutes = max(1, minutes)
+        return Lang.current == .zh ? "部分中断 · 已 \(minutes) 分钟" : "Partial outage · \(minutes) min"
+    }
+
+    /// feed 里的状态词翻成面板用词：原词（monitoring…）保留给 hover 说口径。
+    static func serviceStatusWord(_ status: String) -> String {
+        switch status {
+        case "investigating": return Lang.current == .zh ? "调查中" : "investigating"
+        case "identified": return Lang.current == .zh ? "已定位" : "identified"
+        case "resolved": return Lang.current == .zh ? "已解决" : "resolved"
+        default: return Lang.current == .zh ? "正在监控" : "monitoring"
+        }
+    }
+
+    /// 无事件时的本机一行已删（2026-11-07 他不要本机探测上屏），serviceLocal 一并撤了。
+
+    /// 灯条一格的收尾："18:48 已恢复" / "resolved 18:48"。
+    static func serviceRecovered(_ clock: String) -> String {
+        Lang.current == .zh ? "\(clock) 已恢复" : "resolved \(clock)"
     }
 }

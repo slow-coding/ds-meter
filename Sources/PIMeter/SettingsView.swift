@@ -24,6 +24,9 @@ struct SettingsView: View {
     @State private var autoStart = LoginItem.isEnabled
 
     private let bodyFont = Font.system(size: 11)
+    /// 小标题：跟下面的解释文字同号同灰时整格看不出层级（2026-11-07 遗留项）。
+    /// 面板的块 header 也是 10.5–11pt medium secondary 这一套，两边保持一致。
+    private let headerFont = Font.system(size: 11, weight: .medium)
     private let monoFont = Font.system(size: 12, design: .monospaced)
     private let tabWidth: CGFloat = 430
     private let tabHeight: CGFloat = 304
@@ -77,7 +80,7 @@ struct SettingsView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(T.refreshTitle.s).font(bodyFont).foregroundStyle(.secondary)
+                Text(T.refreshTitle.s).font(headerFont).foregroundStyle(.secondary)
                 Picker("", selection: $meter.interval) {
                     Text(T.refreshPower.s).tag(TimeInterval(300))
                     Text(T.refreshDefault.s).tag(TimeInterval(120))
@@ -91,7 +94,7 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Text(T.languageTitle.s).font(bodyFont).foregroundStyle(.secondary)
+                    Text(T.languageTitle.s).font(headerFont).foregroundStyle(.secondary)
                     Text(L.languageLine()).font(bodyFont)
                     Spacer(minLength: 0)
                 }
@@ -108,17 +111,17 @@ struct SettingsView: View {
     private var account: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(T.apiKeyTitle.s).font(bodyFont).foregroundStyle(.secondary)
+                Text(T.apiKeyTitle.s).font(headerFont).foregroundStyle(.secondary)
                 TextField("sk-...", text: $apiKey)
                     .textFieldStyle(.roundedBorder)
                     .font(monoFont)
                 Text(Account.apiKeyOrigin).font(bodyFont).foregroundStyle(.tertiary)
-                Text(T.apiKeyNote.s).font(bodyFont).foregroundStyle(.secondary)
+                Text(T.apiKeyNote.s).font(bodyFont).foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(T.tokenTitle.s).font(bodyFont).foregroundStyle(.secondary)
+                Text(T.tokenTitle.s).font(headerFont).foregroundStyle(.secondary)
                 TextField("userToken", text: $token)
                     .textFieldStyle(.roundedBorder)
                     .font(monoFont)
@@ -131,7 +134,7 @@ struct SettingsView: View {
                 }
                 Text(T.tokenLoginNote.s).font(bodyFont).foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(T.tokenNote.s).font(bodyFont).foregroundStyle(.secondary)
+                Text(T.tokenNote.s).font(bodyFont).foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -153,12 +156,12 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    Text(T.pricingTitle.s).font(bodyFont).foregroundStyle(.secondary)
+                    Text(T.pricingTitle.s).font(headerFont).foregroundStyle(.secondary)
                     Spacer(minLength: 0)
                     Button(T.openPricing.s) { NSWorkspace.shared.open(PeakHours.sourceURL) }
                         .buttonStyle(.link)
                 }
-                Text(T.pricingRule.s).font(bodyFont).foregroundStyle(.secondary)
+                Text(T.pricingRule.s).font(bodyFont).foregroundStyle(.tertiary)
                 HStack(spacing: 8) {
                     Text("\(T.priceLine.s) \(PeakHours.verifiedOn)").font(bodyFont).foregroundStyle(.tertiary)
                     if PeakHours.isPriceStale {
@@ -168,7 +171,7 @@ struct SettingsView: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(T.dataTitle.s).font(bodyFont).foregroundStyle(.secondary)
+                Text(T.dataTitle.s).font(headerFont).foregroundStyle(.secondary)
                 Text(T.dataRead.s)
                 Text(T.dataStore.s)
                 Text(T.dataSend.s)

@@ -1,4 +1,4 @@
-# 隐私说明（DS Meter）
+# 隐私说明（PI Meter）
 
 这个 app 把你自己这台 Mac 上的 AI 花费显示在菜单栏上。它没有服务器，没有账号体系，没有统计上报，也没有第三方 SDK。非官方工具，跟 DeepSeek 无关。
 
@@ -15,21 +15,21 @@
 
 ## 存在哪
 
-- 两串凭据：`~/Library/Application Support/DSMeter/account.json`，目录 0700、文件 0600。不进日志。
+- 两串凭据：`~/Library/Application Support/PIMeter/account.json`，目录 0700、文件 0600。不进日志。
   - 为什么不用钥匙串：自编译的 app 每次签名都可能变，钥匙串会认不出同一个 app，读一次弹一次密码框。老版本存在钥匙串里的那条会启动时搬进这个文件，之后不再读它。
-- 网页登录态：`~/Library/WebKit/app.dsmeter.macos`（cookie、localStorage）。设置里「退出网页登录」会把它们一起删掉。
+- 网页登录态：`~/Library/WebKit/app.pimeter.macos`（cookie、localStorage）。设置里「退出网页登录」会把它们一起删掉。
 - 刷新间隔这个偏好：`UserDefaults`。
 - 账单响应只在内存里，关掉了磁盘缓存。
 
 ## 发给谁
 
-两个地方：`https://api.deepseek.com/user/balance`（余额）、`https://platform.deepseek.com/api/v0/usage/*`（账单）。
+三个地方：`https://api.deepseek.com/user/balance`（余额）、`https://platform.deepseek.com/api/v0/usage/*`（账单）、`https://status.deepseek.com/feed.atom`（官方状态页，只取内容、不带任何凭据）。
 
 没有别的网络请求，也没有自动更新。
 
 ## 不会做什么
 
-- 不读你的对话内容，不读模型的输入输出，不读会话日志，不读别的 app 的数据。
+- 不读你的对话内容，不读模型的输入输出，不读别的 app 的数据。唯一读的是「子线程」那一层：只数 `~/.claude/projects` 里每次调用的次数与模型名，不读 prompt、不读回答，也不出本机。
 - 不把任何数据传到开发者这边（没有这样的服务器）。
 - 不写 `~/Library/LaunchAgents`（开机自启用的是 LaunchAgent，只在你打开这个开关时写，关掉就删）。
 

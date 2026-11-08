@@ -26,6 +26,9 @@ final class Meter: ObservableObject {
     var onChange: (() -> Void)?
 
     private var timer: Timer?
+    /// 子线程每条来源一套扫描与聚合（SubagentLog）：刷新跟着 refresh() 的节奏走，不另起定时器。
+    /// 来源在 SubagentLane.all 里定义，加一条来源这里不用动。
+    private let subagentLogs: [SubagentLog] = SubagentLane.all.map { SubagentLog(lane: $0) }
     private var recentFetchedAt: Date?
     /// 每天取到的时间，按天数偏移记（0 = 今天，1 = 昨天…）。
     private var dayFetchedAt: [Int: Date] = [:]
@@ -41,6 +44,9 @@ final class Meter: ObservableObject {
     init() {
         let stored = UserDefaults.standard.object(forKey: "refreshInterval") as? Double ?? 0
         interval = stored > 0 ? stored : 120
+        for log in subagentLogs {
+            log.onChange = { [weak self] in self?.applySubagents() }
+        }
     }
 
     func start() {
@@ -91,6 +97,35 @@ final class Meter: ObservableObject {
     func refresh() {
         refreshBalance()
         refreshUsage()
+        for log in subagentLogs { log.refreshAsync() }
+    }
+
+    /// 把子线程的数并进手上已有的那些天：只改已有的 DayCost，不凭空造出哪一天
+    /// （平台账还没到的日子，面板上还得摆「—」，不能因为子线程先到了就摆 0）。
+    private func applySubagents() {
+        guard subagentLogs.contains(where: { $0.loaded }) else { return }
+        var next = snap
+        for (offset, cost) in next.days {
+            next.days[offset] = Self.withSubagents(cost, offset: offset, logs: subagentLogs)
+        }
+        next.laneDaily = Self.laneDaily(logs: subagentLogs)
+        snap = next
+        onChange?()
+    }
+
+    private static func laneDaily(logs: [SubagentLog]) -> [String: [Int: Int]] {
+        Dictionary(logs.map { ($0.lane.id, $0.dailyCalls()) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    /// 一天的账 + 子线程那天每条来源的桶。数都是从 SubagentLog 来的，这里只搬运。
+    private static func withSubagents(_ cost: DayCost, offset: Int, logs: [SubagentLog]) -> DayCost {
+        var cost = cost
+        for log in logs {
+            if let day = log.day(offset: offset) {
+                cost.subagents[log.lane.id] = day
+            }
+        }
+        return cost
     }
 
     /// 面板刚打开：余额永远重取（实时接口，几百字节）；
@@ -103,13 +138,31 @@ final class Meter: ObservableObject {
 
     // MARK: - 余额（官方公开接口，实时）
 
-    /// 余额按现在这个日均还能撑几天。日均是拟合出来的（Trend），不是 30 天除一下。
+    /// 余额按现在这个日均还能撑几天。日均是加权平均（Trend），不是 30 天除一下。
     var runwayDays: Int? {
         Trend.runwayDays(balance: balance.amount ?? 0, burnRate: snap.burnRate)
     }
 
+    /// 副行那个对照：按「近一周」每天实打实花的钱，还能撑几天。
+    /// 只有跟主数差了四分之一以上才返回：两个数差不多时摆两个，只会让人以为界面上有两个答案。
+    /// 2026-11-07 把原来的「今天这个速度」换成了它——回测里单日折算的噪声最大（今天只过了两小时就乘 24 倍），
+    /// 而这块要回答的是「余额还能攼多久」，口径应该跟 20 天这个尺度匹配。
+    var weekPaceDays: Int? {
+        guard let days = runwayDays, days > 0,
+              let week = Trend.weekBurn(daily: snap.daily),
+              let weekDays = Trend.runwayDays(balance: balance.amount ?? 0, burnRate: week)
+        else { return nil }
+        let ratio = Double(weekDays) / Double(days)
+        return ratio <= 0.75 || ratio >= 1.33 ? weekDays : nil
+    }
+
     func refreshBalance() {
+        // 顺路给服务状态记一笔本机探测（成功与否、耗时）：余额是每两分钟必发的那条请求，
+        // 拿它当探针不用多花一次请求。开始/结束时间在这里量，不改 BalanceClient 的协议。
+        let started = Date()
         BalanceClient.fetch { [weak self] state in
+            ServiceStatus.shared.recordProbe(ok: state.error == nil,
+                                             ms: Date().timeIntervalSince(started) * 1000)
             guard let self else { return }
             if state.amount == nil, self.balance.amount != nil {
                 self.balance.error = state.error
@@ -157,7 +210,7 @@ final class Meter: ObservableObject {
     private func apply(bill: PlatformClient.DayBill) {
         rolloverIfNeeded()
         var next = snap
-        next.days[0] = DayCost(bill: bill, weekday: PeakHours.weekday(of: Date()))
+        next.days[0] = Self.withSubagents(DayCost(bill: bill, weekday: PeakHours.weekday(of: Date()), day: PeakHours.dayString(of: Date())), offset: 0, logs: subagentLogs)
         next.ratePerHour = Self.recentRate(hours: next.days[0]?.hours ?? [])
         next.moneyComplete = true
         next.updatedAt = Date()
@@ -221,7 +274,9 @@ final class Meter: ObservableObject {
         PlatformClient.fetchDay(offset: offset) { [weak self] result in
             guard let self, case .success(let bill) = result else { return }
             let weekday = PeakHours.weekday(of: PeakHours.daysBefore(offset))
-            self.snap.days[offset] = DayCost(bill: bill, weekday: weekday)
+            self.snap.days[offset] = Self.withSubagents(
+                DayCost(bill: bill, weekday: weekday, day: PeakHours.dayString(of: PeakHours.daysBefore(offset))),
+                offset: offset, logs: self.subagentLogs)
             self.onChange?()
         }
     }
@@ -237,6 +292,8 @@ final class Meter: ObservableObject {
     // MARK: - 自检用（阻塞版）
 
     func loadSynchronously() {
+        // 子线程只读本地文件，先扫完再画图：自检报告里的数要跟面板一致
+        for log in subagentLogs { log.loadSynchronously() }
         if let key = Account.apiKey, !key.isEmpty {
             pump { done in
                 BalanceClient.fetch { state in
@@ -277,12 +334,15 @@ final class Meter: ObservableObject {
                 PlatformClient.fetchDay(offset: offset) { result in
                     if case .success(let bill) = result {
                         let weekday = PeakHours.weekday(of: PeakHours.daysBefore(offset))
-                        self.snap.days[offset] = DayCost(bill: bill, weekday: weekday)
+                        self.snap.days[offset] = Self.withSubagents(
+                            DayCost(bill: bill, weekday: weekday, day: PeakHours.dayString(of: PeakHours.daysBefore(offset))),
+                            offset: offset, logs: self.subagentLogs)
                     }
                     done()
                 }
             }
         }
+        snap.laneDaily = Self.laneDaily(logs: subagentLogs)
     }
 
     /// 自检用：同步切到某一天（把那天和前一天拉下来）。
@@ -293,7 +353,9 @@ final class Meter: ObservableObject {
                 PlatformClient.fetchDay(offset: target) { result in
                     if case .success(let bill) = result {
                         let weekday = PeakHours.weekday(of: PeakHours.daysBefore(target))
-                        self.snap.days[target] = DayCost(bill: bill, weekday: weekday)
+                        self.snap.days[target] = Self.withSubagents(
+                            DayCost(bill: bill, weekday: weekday, day: PeakHours.dayString(of: PeakHours.daysBefore(target))),
+                            offset: target, logs: self.subagentLogs)
                     }
                     done()
                 }
@@ -333,6 +395,19 @@ final class Meter: ObservableObject {
             let flash = (total * 0.96 * 100).rounded() / 100
             let pro = ((total - flash) * 100).rounded() / 100
             bill.modelCost = ["deepseek-flash": flash, "deepseek-v4-pro": pro]
+            // 假数据也要有检索：截图里那一行不能空着（真实次数不带出本机）
+            // 检索：假数据也给它一份按小时的分布（跟金额柱子同一个形状）
+            var toolCalls = 0
+            for hour in 0..<24 {
+                let calls = Int((shape[hour] * scale * 10 * density).rounded())
+                bill.hourToolCalls[hour] = calls
+                toolCalls += calls
+            }
+            // 次数只此一份：functionCalls 由按小时的 hourToolCalls 求和拆分而来。
+            // 原先这里又另写一份「total*3 / total*0.3」，两套数对不上——
+            // 分模型之和 + 检索费就 ≠ hero 总额（差 3.65，2026-11-07 实测）。
+            bill.functionCalls = ["tool-search": Int(Double(toolCalls) * 0.85),
+                                  "tool-fetch": max(0, toolCalls - Int(Double(toolCalls) * 0.85))]
             let tokens = total * 13_000_000 * density
             // hitDrop：那天命中的份额比基准差多少（假数据里每天不一样，命中率那行才有「比昨天」可看）
             // 请求数按真实比例给：一次请求平均十几万 token（上下文长），所以一元钱不到一百次
@@ -363,7 +438,7 @@ final class Meter: ObservableObject {
 
         rolloverIfNeeded()
         var next = Snapshot()
-        next.days[0] = DayCost(bill: bill(scale: 1), weekday: PeakHours.weekday(of: Date()))
+        next.days[0] = DayCost(bill: bill(scale: 1), weekday: PeakHours.weekday(of: Date()), day: PeakHours.dayString(of: Date()))
         let scales: [Double] = [0.62, 0.88, 0.45, 1.05, 0.71, 0.93, 0.58]
         // 每天「一块钱换来多少 token」不一样（缓存命中率高就换得多），所以每亿 token 的单价天天不同：
         // 截图上那个括号里的对照才看得出变化，否则假数据里每天都一样。
@@ -374,9 +449,63 @@ final class Meter: ObservableObject {
             let offset = index + 1
             next.days[offset] = DayCost(
                 bill: bill(scale: scale, density: densities[index % densities.count], hitDrop: hitDrops[index % hitDrops.count]),
-                weekday: PeakHours.weekday(of: PeakHours.daysBefore(offset))
+                weekday: PeakHours.weekday(of: PeakHours.daysBefore(offset)),
+                day: PeakHours.dayString(of: PeakHours.daysBefore(offset))
             )
         }
+
+        // 子线程：每条来源一排细柱一行字，截图里都不能空着。
+        // 形状跟金额柱同源但密度不同，别让人读成同一份数。
+        func demoLane(_ cost: inout DayCost, lane: SubagentLane, scale: Double, density: Double) {
+            var total = 0
+            var hours = [Int](repeating: 0, count: 24)
+            for hour in 0..<24 {
+                let calls = Int((shape[hour] * scale * 6 * density).rounded())
+                hours[hour] = calls
+                total += calls
+            }
+            // 每天 ~50 万上下 × 当天密度：截图上 token 那段不能是 0，也和次数一样有天差。
+            // 拆分比例取自真数据的实测：命中 0.987 / 未命中 0.005 / 输出 0.008，别造出离谱的省额。
+            let tokens = Int((Double(total) * 160_000 * density).rounded())
+            var day = SubagentLog.Day(calls: total, hours: hours)
+            day.hitTokens = Int((Double(tokens) * 0.987).rounded())
+            day.missTokens = Int((Double(tokens) * 0.005).rounded())
+            day.outTokens = Int((Double(tokens) * 0.008).rounded())
+            for hour in 0..<24 where hours[hour] > 0 {
+                let share = Double(hours[hour]) / Double(max(total, 1))
+                day.hourTokens[hour] = Int((Double(tokens) * share).rounded())
+                day.hourHit[hour] = Int((Double(day.hitTokens) * share).rounded())
+                day.hourMiss[hour] = Int((Double(day.missTokens) * share).rounded())
+                day.hourOut[hour] = Int((Double(day.outTokens) * share).rounded())
+            }
+            // CC 自带联网的假数：截图里「＋ CC N 次」那句不能空着（真实次数不带出本机）。
+            // 形状跟细柱同源但量级小得多，一天十几条的样。
+            if lane.id == "cc" {
+                let webTotal = max(8, Int((Double(total) * 0.08).rounded()))
+                day.webCalls = webTotal
+                for hour in 0..<24 where hours[hour] > 0 {
+                    let share = Double(hours[hour]) / Double(max(total, 1))
+                    day.hourWeb[hour] = max(1, Int((Double(webTotal) * share).rounded()))
+                }
+                day.searchViaDS = max(2, webTotal / 4)
+            }
+            cost.subagents[lane.id] = day
+        }
+        for offset in 0...7 {
+            guard var cost = next.days[offset] else { continue }
+            let scale = offset == 0 ? 1.0 : scales[offset - 1]
+            let density = offset == 0 ? 1.0 : densities[(offset - 1) % densities.count]
+            for lane in SubagentLane.all {
+                demoLane(&cost, lane: lane, scale: scale, density: density)
+            }
+            next.days[offset] = cost
+        }
+        next.laneDaily = Dictionary(uniqueKeysWithValues: SubagentLane.all.map { lane in
+            (lane.id, Dictionary(next.days.compactMap { offset, cost in
+                let calls = cost.subagents[lane.id]?.calls ?? 0
+                return calls > 0 ? (offset, calls) : nil
+            }, uniquingKeysWith: { a, _ in a }))
+        })
 
         // 日历：31 个数，老的在前面，最后一个 = 今天（跟 fetchRecent 的形状一致）
         // 形状刻意不均匀：有零花钱的周末、有几天忙到翻倍，热力格才看得出深浅
@@ -430,16 +559,27 @@ struct DayCost {
     var hourMiss: [Int] = Array(repeating: 0, count: 24)
     /// 那天是周几：1 = 周日 … 7 = 周六。
     var weekday = 0
+    /// 那个北京日（yyyy-MM-dd）：判法定节假日用。空串 = 没有日期，只按星期几判。
+    var day = ""
     var models: [Model] = []
     var requests = 0
     var miss = 0
     var hit = 0
     var output = 0
+    /// 检索调用：搜索与抓取分开计（平台按 FUNCTION_CALL 给数）。
+    var searchCalls = 0
+    var fetchCalls = 0
+    /// 每小时的检索次数：检索费按它摊进 hours。
+    var hourToolCalls: [Int] = Array(repeating: 0, count: 24)
+    /// 子线程（不进任何钱和 token 的账）：每条来源一份，键是 SubagentLane.id。
+    /// cc 是年费订阅（¥0），pi 已在 DeepSeek 账单里。
+    var subagents: [String: SubagentLog.Day] = [:]
 
     init() {}
 
     /// 从平台那份账单装起来：金额按小时分、按模型分，token 量按模型分。
-    init(bill: PlatformClient.DayBill, weekday: Int) {
+    init(bill: PlatformClient.DayBill, weekday: Int, day: String = "") {
+        self.day = day
         self.hours = bill.hours
         self.hourTokens = bill.hourTokens
         self.hourRequests = bill.hourRequests
@@ -457,9 +597,34 @@ struct DayCost {
             list.append(Model(name: name, tokens: totals.miss + totals.hit + totals.response, requests: totals.requests, cost: money))
         }
         models = list.sorted { $0.cost > $1.cost }
+        searchCalls = bill.functionCalls["tool-search"] ?? 0
+        fetchCalls = bill.functionCalls["tool-fetch"] ?? 0
+        hourToolCalls = bill.hourToolCalls
+        // 检索按次收钱，和 token 那套分着算：按发生的小时并进 hours，
+        // 这样柱子、闲时/高峰、每亿 token 单价、近 30 天全都自然含这笔钱。
+        for hour in 0..<24 where hourToolCalls[hour] > 0 {
+            hours[hour] += Double(hourToolCalls[hour]) * Self.toolPrice
+        }
     }
 
+    /// 检索一共多少次（搜索 + 抓取）。
+    var toolCalls: Int { searchCalls + fetchCalls }
+
+    /// Claude Code 自带联网（WebSearch / WebFetch）那天多少次：走订阅、不进 DeepSeek 账单，
+    /// 与上面那 75 次账单口径分着摆，不并进 toolCalls、也不乘单价。
+    var ccWebCalls: Int { subagents["cc"]?.webCalls ?? 0 }
+
+    /// 单次检索的价格：平台按每 1,000 次 5 元计，不按 token、不看返回几条。
+    static let toolPrice = 0.005
+
+    /// 检索这笔钱。平台账单接口不单列这笔，按单价 × 次数算出来。
+    var toolCost: Double { Double(toolCalls) * Self.toolPrice }
+
     var money: Double { hours.reduce(0, +) }
+
+    /// 分模型金额之和：检索费没挂在任何模型上，所以它比 money 小一笔检索的钱。
+    /// 「分模型」那格的总数只能用它——用 money 会把检索费再数一遍。
+    var modelsCost: Double { models.reduce(0) { $0 + $1.cost } }
 
     /// 那天一共过了多少 token（命中 + 未命中 + 输出）。
     var tokenTotal: Int { hit + miss + output }
@@ -472,13 +637,13 @@ struct DayCost {
         return total > 0 ? money / Double(total) * 100_000_000 : nil
     }
 
-    /// 那天有没有高峰时段（周末全天都是闲时价）。
-    var hasPeakHours: Bool { (2...6).contains(weekday) }
+    /// 那天有没有高峰时段（周末、法定节假日全天都是闲时价）。
+    var hasPeakHours: Bool { (2...6).contains(weekday) && !PeakHours.isHoliday(day) }
 
     /// 落在高峰那几小时的钱（已经按双倍价记的）。
     var peak: Double {
         (0..<24).reduce(0.0) { sum, hour in
-            PeakHours.isPeak(hour: hour, weekday: weekday) ? sum + hours[hour] : sum
+            PeakHours.isPeak(hour: hour, weekday: weekday, day: day) ? sum + hours[hour] : sum
         }
     }
 
@@ -525,15 +690,20 @@ struct Snapshot {
     var days: [Int: DayCost] = [:]
     /// 近 30 天每天花了多少，老的在前面，最后一个就是今天（heatmap 用）。
     var daily: [Double] = []
+    /// Claude Code 子线程按天：偏移 → 次数（自检报告逐日对基准用）。
+    /// 子线程每条来源按天：来源 id →（偏移 → 次数）（自检报告逐日对基准用）。
+    var laneDaily: [String: [Int: Int]] = [:]
     var moneyComplete = true
     var moneySince: Date?
     var ratePerHour: Double?
     /// 最近 30 天一共花了多少（跟日历上那 30 格对得上）。
     var totalRecent: Double?
 
-    /// 现在每天花多少：把 daily 拟成一条线取最后一天的值（Trend）。
+    /// 现在每天花多少：daily 按半衰期 3 天加权平均，今天只算已过的那一段（Trend）。
     /// 不缓存、不另存一分：daily 一变它就跟着变，不会出现「两个日均」各说各的。
-    var burnRate: Double? { Trend.burnRate(daily: daily) }
+    var burnRate: Double? {
+        Trend.burnRate(daily: daily, elapsed: PeakHours.hourFraction(of: Date()))
+    }
 
     var updatedAt: Date?
     var error: String?

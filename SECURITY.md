@@ -5,9 +5,9 @@
 ## 承诺（每条都能在代码里对）
 
 - **没有服务器**：仓库里没有后端，没有账号体系，没有统计上报，没有第三方 SDK，没有自动更新通道。
-- **只连两个域名**：`api.deepseek.com`（查余额）、`platform.deepseek.com`（读账单）。没有第三个。
-- **不读你的内容**：不读对话、不读会话日志、不读别的 app 的数据。
-- **凭据只在本机**：`~/Library/Application Support/DSMeter/account.json`，目录 `0700`、文件 `0600`；网页登录态在 `~/Library/WebKit/app.dsmeter.macos`。设置里两颗按钮分别清掉。
+- **只连三个域名**：`api.deepseek.com`（查余额）、`platform.deepseek.com`（读账单）、`status.deepseek.com`（读官方状态页，只取内容、不带凭据）。没有第四个。
+- **不读你的内容**：不读对话、不读别的 app 的数据。唯一读的是 `~/.claude/projects` 里 Claude Code 的调用记录——只数次数和模型名，不看 prompt 和回答，也不出本机。
+- **凭据只在本机**：`~/Library/Application Support/PIMeter/account.json`，目录 `0700`、文件 `0600`；网页登录态在 `~/Library/WebKit/app.pimeter.macos`。设置里两颗按钮分别清掉。
 - **不写日志**：没有 `NSLog` / `os_log` / 日志文件；账单响应只在内存里，磁盘缓存关掉了（`URLSessionConfiguration.ephemeral` + `urlCache = nil`）。
 - **不发签名包**：Release 里的 dmg 是 ad-hoc 签名（`codesign --sign -`），没有开发者的身份，也没有公证。
 
@@ -22,10 +22,10 @@
 ```bash
 ./scripts/security-audit.sh                 # 查仓库：凭据形态、历史、域名、依赖、日志调用
 ./scripts/security-audit.sh <二进制路径>     # 再把二进制里的字符串扫一遍
-.build/release/DSMeter --probe              # 打印它当前掌握的所有数字
+.build/release/PIMeter --probe              # 打印它当前掌握的所有数字
 ```
 
-- 网络：用 Little Snitch / LuLu 之类的工具看它只连那两个域名。
+- 网络：用 Little Snitch / LuLu 之类的工具看它只连那三个域名。
 - 代码：`Sources/` 两千多行，读一遍比信一段说明快。
 
 ## 发版门禁
@@ -48,8 +48,8 @@ This app reads your own DeepSeek usage and draws it in the menu bar. Here is exa
 
 - **No server**: no backend, no accounts, no telemetry, no third-party SDK, no auto-update channel.
 - **Two hosts only**: `api.deepseek.com` (balance) and `platform.deepseek.com` (billing).
-- **Never reads your content**: no conversations, no session logs, no other apps' data.
-- **Credentials stay local**: `~/Library/Application Support/DSMeter/account.json` (dir `0700`, file `0600`); web sign-in state in `~/Library/WebKit/app.dsmeter.macos`. Both can be cleared from Settings.
+- **Never reads your content**: no conversations, no other apps' data. The one local source it reads is `~/.claude/projects` — Claude Code's own call records, counted by model and time only; prompts and answers are never touched, and nothing leaves the machine.
+- **Credentials stay local**: `~/Library/Application Support/PIMeter/account.json` (dir `0700`, file `0600`); web sign-in state in `~/Library/WebKit/app.pimeter.macos`. Both can be cleared from Settings.
 - **No logs**: no `NSLog` / `os_log` / log files; billing responses live in memory only (ephemeral session, disk cache disabled).
 - **Unsigned builds**: releases are ad-hoc signed (`codesign --sign -`), no developer identity, no notarization.
 

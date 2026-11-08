@@ -54,7 +54,7 @@ struct PickerStrip: View {
                         Text(label)
                             .font(.system(size: 8.5))
                             .monospacedDigit()
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Style.gray(colorScheme == .dark))
                             .lineLimit(1)
                             .fixedSize()
                             .offset(y: stagger)
@@ -78,12 +78,15 @@ struct PickerStrip: View {
                             .strokeBorder(Color.primary.opacity(isHovering ? 0.3 : 0), lineWidth: 1)
                     )
                     .frame(width: Self.slot, height: Self.barArea, alignment: .bottom)
-                    .contentShape(Rectangle())
-                    .onTapGesture { onPick(offset) }
-                    .onHover { hovering = $0 ? offset : (hovering == offset ? nil : hovering) }
-                    .help("\(Self.dayText(offset: offset)) \(Self.weekdayName(offset: offset)) · \(Fmt.money(money))")
                 }
                 .frame(width: Self.slot, height: Self.barArea + Self.labelHeight, alignment: .bottom)
+                // 可点面积盖满整列（包括柱顶数字和柱子上面那段空白）：
+                // 2026-11-07 他点柱顶那个「259/index」选不中——手势原先只挂在柱子上，数字是另一层，点在数字上落空。
+                // 悬停和 tooltip 也一并提到整列，免得「数字上面不动、柱子上面才动」。
+                .contentShape(Rectangle())
+                .onTapGesture { onPick(offset) }
+                .onHover { hovering = $0 ? offset : (hovering == offset ? nil : hovering) }
+                .help("\(Self.dayText(offset: offset)) \(Self.weekdayName(offset: offset)) · \(Fmt.money(money))")
             }
         }
         .frame(height: Self.barArea + Self.labelHeight, alignment: .bottom)
@@ -123,6 +126,15 @@ struct PickerStrip: View {
                     .frame(width: Self.slot)
                     .foregroundStyle(.tertiary)
             }
+            // 柱顶那三个数没地方带单位（一列 11pt 写不下「¥121」），单位在这里说一次：
+            // 刻度行右端缀一个「元」，整条的数就都有了口径，不用每根柱子重复写符号。
+            Text(T.unitYuan.s)
+                .font(.system(size: 8.5))
+                .monospacedDigit()
+                .foregroundStyle(.tertiary)
+                .padding(.leading, 4)
+                .lineLimit(1)
+                .fixedSize()
         }
         .frame(height: 11, alignment: .top)
         .padding(.horizontal, Self.sideInset)
@@ -139,19 +151,12 @@ struct PickerStrip: View {
         return min(1, money / reference)
     }
 
-    /// 一根柱子的颜色：只有一个主色调（面板上「命中率」那支蓝），深浅跟着金额走——
-    /// 便宜的天是压暗的蓝，贵的那几天才亮起来。橙色试过，在真实数据上偏土黄，
-    /// 跟面板里那几支橙糊成一片；蓝色在这块深底上最干净，也不跟绿/橙打架。
+    /// 一根柱子的颜色：账单那支琥珀（2026-11-08 口径：一个色相只指一件事，这个面板就是「每天花了多少」）。
+    /// 深浅还是跟着金额走：便宜的天淡（半透明）、贵的那几天实。
     static func barColor(money: Double, reference: Double, scheme: ColorScheme) -> Color {
         let t = heat(money: money, reference: reference)
         guard t > 0.03 else { return Color.primary.opacity(0.10) }   // 那天没花钱：一根淡灰
-        let hue = 0.595                                             // 蓝（≈214°，跟命中率那支同相）
-        if scheme == .dark {
-            // 深底上：越贵越亮越实，便宜的天沉下去（亮度压不到太低，不然跟灰底分不开）
-            return Color(hue: hue, saturation: 0.30 + 0.42 * t, brightness: 0.48 + 0.44 * t)
-        }
-        // 浅底上反过来：越贵越深，不然最贵那根在白底上发飘
-        return Color(hue: hue, saturation: 0.34 + 0.40 * t, brightness: 0.99 - 0.30 * t)
+        return Style.offPeak.opacity(0.45 + 0.55 * t)
     }
 
     /// 柱顶上要标金额的那几根：30 天里最贵的三根（offset，0 = 今天）。没花钱的天不算。
